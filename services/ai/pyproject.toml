@@ -1,0 +1,5 @@
+[project]
+name = "aurafarming-ai"
+version = "0.0.0"
+requires-python = ">=3.12"
+description = "Serviço de scoring/verificação (FastAPI) — placeholder"
