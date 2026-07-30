@@ -1,0 +1,26 @@
+{
+  "name": "aurafarming",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=20.11.0 <23.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@swc/core", "esbuild"]
+  },
+  "prettier": "@aurafarming/config/prettier",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@aurafarming/config": "workspace:*",
+    "prettier": "^3.9.6",
+    "turbo": "2.10.7"
+  }
+}
