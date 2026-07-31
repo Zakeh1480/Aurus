@@ -42,6 +42,9 @@ describe("ProfileSchema", () => {
   it("aceita um profile válido", () => {
     const result = ProfileSchema.safeParse({
       userId: UUID_A,
+      nickname: "PlayerOne",
+      avatarUrl: null,
+      bio: null,
       rating: 1000,
       auraScoreAvg: null,
       matchesPlayed: 0,
@@ -56,7 +59,27 @@ describe("ProfileSchema", () => {
   it("rejeita rating negativo", () => {
     const result = ProfileSchema.safeParse({
       userId: UUID_A,
+      nickname: "PlayerOne",
+      avatarUrl: null,
+      bio: null,
       rating: -1,
+      auraScoreAvg: null,
+      matchesPlayed: 0,
+      wins: 0,
+      losses: 0,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita nickname vazio", () => {
+    const result = ProfileSchema.safeParse({
+      userId: UUID_A,
+      nickname: "",
+      avatarUrl: null,
+      bio: null,
+      rating: 1000,
       auraScoreAvg: null,
       matchesPlayed: 0,
       wins: 0,
@@ -114,8 +137,8 @@ describe("MatchResultSchema", () => {
     const result = MatchResultSchema.safeParse({
       id: UUID_A,
       matchId: UUID_A,
-      player1: { userId: UUID_A, score: VALID_AURA_SCORE },
-      player2: { userId: UUID_B, score: VALID_AURA_SCORE },
+      player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12 },
+      player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: -12 },
       winnerId: UUID_A,
       createdAt: NOW,
     });
@@ -126,8 +149,8 @@ describe("MatchResultSchema", () => {
     const result = MatchResultSchema.safeParse({
       id: UUID_A,
       matchId: UUID_A,
-      player1: { userId: UUID_A, score: VALID_AURA_SCORE },
-      player2: { userId: UUID_B, score: VALID_AURA_SCORE },
+      player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 0 },
+      player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: 0 },
       winnerId: null,
       createdAt: NOW,
     });
@@ -138,8 +161,20 @@ describe("MatchResultSchema", () => {
     const result = MatchResultSchema.safeParse({
       id: UUID_A,
       matchId: UUID_A,
-      player1: { userId: UUID_A, score: VALID_AURA_SCORE },
+      player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12 },
       winnerId: null,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita ratingDelta não inteiro", () => {
+    const result = MatchResultSchema.safeParse({
+      id: UUID_A,
+      matchId: UUID_A,
+      player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12.5 },
+      player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: -12 },
+      winnerId: UUID_A,
       createdAt: NOW,
     });
     expect(result.success).toBe(false);

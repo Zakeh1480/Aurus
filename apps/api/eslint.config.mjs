@@ -10,4 +10,11 @@ export default [
       "@typescript-eslint/consistent-type-imports": "off",
     },
   },
+  {
+    // Script de CLI (prisma db seed) — console.log é a saída esperada.
+    files: ["prisma/seed.ts"],
+    rules: {
+      "no-console": "off",
+    },
+  },
 ];

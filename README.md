@@ -20,7 +20,7 @@ gera um **Aura Score** e atualiza um ranking global.
 ```
 apps/
   web/          # placeholder de workspace — app Next.js real entra no Prompt 8
-  api/          # NestJS — skeleton com GET /health
+  api/          # NestJS — GET /health, Prisma (Postgres) via PrismaModule
 services/
   ai/           # placeholder — app FastAPI real entra em prompt futuro
 packages/
@@ -44,14 +44,27 @@ pnpm lint     # lint de todo o monorepo
 pnpm test     # testes de todo o monorepo
 ```
 
-> `docker compose up` e `pnpm --filter api prisma migrate dev` são os
-> comandos previstos no `CLAUDE.md`, mas `docker-compose.yml` e
-> `prisma/schema.prisma` ainda não existem neste estado do repo — chegam em
-> um prompt posterior.
+## Banco de dados (Postgres + Redis)
+
+```bash
+cp .env.example .env               # ajuste se necessário — DATABASE_URL já
+                                    # bate com as credenciais do compose abaixo
+docker compose up -d               # sobe Postgres 16 + Redis 7 locais
+pnpm --filter api prisma migrate dev   # aplica as migrations (cria o schema)
+pnpm --filter api prisma db seed       # popula alguns usuários + 1 partida de exemplo
+```
+
+`schema.prisma` (`apps/api/prisma/schema.prisma`) é o espelho persistente dos
+DTOs/enums de `packages/shared` — nenhum enum de domínio é redefinido fora de
+`shared`. Exclusão de conta é sempre anonimização (`User.anonymizedAt`), nunca
+hard-delete — histórico de partidas (`Match`/`MatchParticipant`/`MatchResult`)
+não pode ser apagado via cascade.
 
 ## Variáveis de ambiente
 
-Ver `.env.example`. Nenhum segredo é commitado; o humano injeta os valores
+Ver `.env.example` — o arquivo `.env` fica na raiz do monorepo mesmo para
+variáveis usadas só por `apps/api` (Prisma/NestJS carregam explicitamente a
+partir da raiz). Nenhum segredo é commitado; o humano injeta os valores
 reais via `.env` local ou variáveis de ambiente do provedor de infra.
 
 ## Convenções
