@@ -71,8 +71,8 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
   "match:result": {
     id: UUID_A,
     matchId: UUID_A,
-    player1: { userId: UUID_A, score: VALID_AURA_SCORE },
-    player2: { userId: UUID_B, score: VALID_AURA_SCORE },
+    player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12 },
+    player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: -12 },
     winnerId: UUID_A,
     createdAt: NOW,
   },

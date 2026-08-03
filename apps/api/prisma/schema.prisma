@@ -1,0 +1,190 @@
+// Espelho persistente dos contratos Zod em @aurafarming/shared.
+// Nenhum enum/DTO de domínio é redefinido aqui — os enums abaixo reusam
+// exatamente os valores de MatchStatusSchema (packages/shared).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MatchStatus {
+  pending
+  active
+  completed
+  cancelled
+}
+
+enum MatchSide {
+  player1
+  player2
+}
+
+enum ConsentType {
+  camera
+}
+
+model User {
+  id           String    @id @default(uuid(7))
+  email        String    @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  /// LGPD: null = conta ativa; timestamp = conta anonimizada (nunca hard-delete).
+  anonymizedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  profile              Profile?
+  refreshTokens        RefreshToken[]
+  consents             Consent[]
+  matchParticipations  MatchParticipant[]
+  matchesAsPlayer1     Match[]            @relation("MatchPlayer1")
+  matchesAsPlayer2     Match[]            @relation("MatchPlayer2")
+  matchesWon           Match[]            @relation("MatchWinner")
+  resultsAsPlayer1     MatchResult[]      @relation("MatchResultPlayer1")
+  resultsAsPlayer2     MatchResult[]      @relation("MatchResultPlayer2")
+  resultsWon           MatchResult[]      @relation("MatchResultWinner")
+  rankingSnapshots     RankingSnapshot[]
+
+  @@map("users")
+}
+
+model Profile {
+  userId        String   @id
+  nickname      String
+  avatarUrl     String?
+  bio           String?
+  rating        Int      @default(1000)
+  auraScoreAvg  Float?
+  matchesPlayed Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([rating(sort: Desc)])
+  @@map("profiles")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid(7))
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Consent {
+  id            String      @id @default(uuid(7))
+  userId        String
+  type          ConsentType
+  termsVersion  String
+  grantedAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@map("consents")
+}
+
+model Match {
+  id             String      @id @default(uuid(7))
+  player1Id      String
+  player2Id      String
+  status         MatchStatus @default(pending)
+  /// Carimbo de AURA_SCORE_VERSION (packages/shared) no momento do score.
+  scoreVersion   String?
+  /// Último AuraFeatures (packages/shared) recebido de cada jogador — estado ao vivo.
+  featuresPlayer1 Json?
+  featuresPlayer2 Json?
+  /// Último AuraScore (packages/shared) calculado para cada jogador — estado ao vivo.
+  scorePlayer1   Json?
+  scorePlayer2   Json?
+  winnerId       String?
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime    @default(now())
+
+  player1      User               @relation("MatchPlayer1", fields: [player1Id], references: [id], onDelete: Restrict)
+  player2      User               @relation("MatchPlayer2", fields: [player2Id], references: [id], onDelete: Restrict)
+  winner       User?              @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: Restrict)
+  participants MatchParticipant[]
+  result       MatchResult?
+
+  @@index([player1Id])
+  @@index([player2Id])
+  @@index([status])
+  @@map("matches")
+}
+
+model MatchParticipant {
+  id           String    @id @default(uuid(7))
+  matchId      String
+  userId       String
+  side         MatchSide
+  ratingBefore Int
+  ratingAfter  Int
+  createdAt    DateTime  @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, userId])
+  @@unique([matchId, side])
+  @@index([userId])
+  @@map("match_participants")
+}
+
+model MatchResult {
+  id                 String   @id @default(uuid(7))
+  matchId            String   @unique
+  player1Id          String
+  /// AuraScore (packages/shared) consolidado do player1, breakdown incluso.
+  player1Score       Json
+  player1RatingDelta Int
+  player2Id          String
+  /// AuraScore (packages/shared) consolidado do player2, breakdown incluso.
+  player2Score       Json
+  player2RatingDelta Int
+  winnerId           String?
+  createdAt          DateTime @default(now())
+
+  match   Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player1 User  @relation("MatchResultPlayer1", fields: [player1Id], references: [id], onDelete: Restrict)
+  player2 User  @relation("MatchResultPlayer2", fields: [player2Id], references: [id], onDelete: Restrict)
+  winner  User? @relation("MatchResultWinner", fields: [winnerId], references: [id], onDelete: Restrict)
+
+  @@index([player1Id])
+  @@index([player2Id])
+  @@map("match_results")
+}
+
+/// Fonte de verdade durável do ranking — Redis é cache/derivado disto, não o inverso.
+model RankingSnapshot {
+  id            String   @id @default(uuid(7))
+  snapshotAt    DateTime @default(now())
+  rank          Int
+  userId        String
+  /// Denormalizado no momento do snapshot — não muda se o usuário renomear depois.
+  displayName   String
+  rating        Int
+  auraScoreAvg  Float
+  matchesPlayed Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([snapshotAt, rank])
+  @@index([userId])
+  @@map("ranking_snapshots")
+}

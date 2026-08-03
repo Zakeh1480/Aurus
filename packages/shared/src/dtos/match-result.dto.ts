@@ -5,6 +5,8 @@ import { AuraScoreSchema } from "./aura-score.dto.js";
 const MatchResultPlayerSchema = z.object({
   userId: z.uuid(),
   score: AuraScoreSchema,
+  /** Variação de rating aplicada a este jogador por causa deste resultado. */
+  ratingDelta: z.number().int(),
 });
 
 /**
