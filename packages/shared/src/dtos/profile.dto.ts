@@ -16,3 +16,19 @@ export const ProfileSchema = z.object({
 });
 
 export type Profile = z.infer<typeof ProfileSchema>;
+
+/**
+ * Reaproveita os campos editáveis de ProfileSchema, sem redeclarar limites —
+ * contract-first (CLAUDE.md, regra 1).
+ */
+export const UpdateProfileRequestSchema = z
+  .object({
+    nickname: ProfileSchema.shape.nickname,
+    avatarUrl: ProfileSchema.shape.avatarUrl,
+    bio: ProfileSchema.shape.bio,
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Informe ao menos um campo para atualizar.",
+  });
+export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
