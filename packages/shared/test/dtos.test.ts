@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { AuraFeaturesSchema } from "../src/dtos/aura-features.dto.js";
 import { AuraScoreSchema } from "../src/dtos/aura-score.dto.js";
+import {
+  AuthResponseSchema,
+  AuthTokensSchema,
+  LoginRequestSchema,
+  RegisterRequestSchema,
+} from "../src/dtos/auth.dto.js";
 import { MatchResultSchema } from "../src/dtos/match-result.dto.js";
 import { MatchSchema } from "../src/dtos/match.dto.js";
 import { ProfileSchema } from "../src/dtos/profile.dto.js";
@@ -34,6 +40,120 @@ describe("UserSchema", () => {
       createdAt: NOW,
       updatedAt: NOW,
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("RegisterRequestSchema", () => {
+  it("aceita um registro válido", () => {
+    const result = RegisterRequestSchema.safeParse({
+      email: "player@example.com",
+      password: "senha-forte-123",
+      displayName: "Player One",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita senha menor que 8 caracteres", () => {
+    const result = RegisterRequestSchema.safeParse({
+      email: "player@example.com",
+      password: "short",
+      displayName: "Player One",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita email inválido", () => {
+    const result = RegisterRequestSchema.safeParse({
+      email: "not-an-email",
+      password: "senha-forte-123",
+      displayName: "Player One",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita displayName vazio", () => {
+    const result = RegisterRequestSchema.safeParse({
+      email: "player@example.com",
+      password: "senha-forte-123",
+      displayName: "",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("LoginRequestSchema", () => {
+  it("aceita um login válido", () => {
+    const result = LoginRequestSchema.safeParse({
+      email: "player@example.com",
+      password: "qualquer-senha",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita senha vazia", () => {
+    const result = LoginRequestSchema.safeParse({
+      email: "player@example.com",
+      password: "",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita email inválido", () => {
+    const result = LoginRequestSchema.safeParse({
+      email: "not-an-email",
+      password: "qualquer-senha",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("AuthTokensSchema", () => {
+  it("aceita tokens válidos", () => {
+    const result = AuthTokensSchema.safeParse({
+      accessToken: "jwt.token.value",
+      expiresIn: 900,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita expiresIn não positivo", () => {
+    const result = AuthTokensSchema.safeParse({
+      accessToken: "jwt.token.value",
+      expiresIn: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita expiresIn fracionário", () => {
+    const result = AuthTokensSchema.safeParse({
+      accessToken: "jwt.token.value",
+      expiresIn: 900.5,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("AuthResponseSchema", () => {
+  const validUser = {
+    id: UUID_A,
+    email: "player@example.com",
+    displayName: "Player One",
+    avatarUrl: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+
+  it("aceita uma resposta de auth válida", () => {
+    const result = AuthResponseSchema.safeParse({
+      user: validUser,
+      tokens: { accessToken: "jwt.token.value", expiresIn: 900 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita quando falta tokens", () => {
+    const result = AuthResponseSchema.safeParse({ user: validUser });
     expect(result.success).toBe(false);
   });
 });
