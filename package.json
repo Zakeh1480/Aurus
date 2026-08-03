@@ -7,7 +7,7 @@
     "node": ">=20.11.0 <23.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/engines", "@swc/core", "esbuild", "prisma"]
+    "onlyBuiltDependencies": ["@prisma/engines", "@swc/core", "argon2", "esbuild", "prisma"]
   },
   "prettier": "@aurafarming/config/prettier",
   "scripts": {
