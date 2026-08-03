@@ -8,10 +8,12 @@ import {
   LoginRequestSchema,
   RegisterRequestSchema,
 } from "../src/dtos/auth.dto.js";
+import { ConsentSchema, ConsentStatusSchema, GrantConsentRequestSchema } from "../src/dtos/consent.dto.js";
 import { MatchResultSchema } from "../src/dtos/match-result.dto.js";
 import { MatchSchema } from "../src/dtos/match.dto.js";
-import { ProfileSchema } from "../src/dtos/profile.dto.js";
+import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.dto.js";
 import { RankingEntrySchema } from "../src/dtos/ranking-entry.dto.js";
+import { MatchHistoryEntrySchema, UserDataExportSchema } from "../src/dtos/user-data-export.dto.js";
 import { UserSchema } from "../src/dtos/user.dto.js";
 
 const UUID_A = "123e4567-e89b-12d3-a456-426614174000";
@@ -211,6 +213,32 @@ describe("ProfileSchema", () => {
   });
 });
 
+describe("UpdateProfileRequestSchema", () => {
+  it("aceita atualização parcial de um único campo", () => {
+    expect(UpdateProfileRequestSchema.safeParse({ nickname: "NovoNick" }).success).toBe(true);
+  });
+
+  it("aceita bio/avatarUrl nulos explicitamente", () => {
+    expect(UpdateProfileRequestSchema.safeParse({ bio: null, avatarUrl: null }).success).toBe(true);
+  });
+
+  it("rejeita payload vazio", () => {
+    expect(UpdateProfileRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("rejeita nickname vazio", () => {
+    expect(UpdateProfileRequestSchema.safeParse({ nickname: "" }).success).toBe(false);
+  });
+
+  it("descarta campos desconhecidos como userId — não dá pra injetar outro titular pelo payload", () => {
+    const result = UpdateProfileRequestSchema.safeParse({ nickname: "X", userId: "outro-usuario" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("userId");
+    }
+  });
+});
+
 describe("MatchSchema", () => {
   it("aceita um match válido", () => {
     const result = MatchSchema.safeParse({
@@ -357,5 +385,137 @@ describe("AuraScoreSchema", () => {
   it("rejeita qualquer version diferente do literal aura-score-v1", () => {
     const result = AuraScoreSchema.safeParse({ ...VALID_AURA_SCORE, version: "aura-score-v2" });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("ConsentSchema", () => {
+  it("aceita um consentimento válido", () => {
+    const result = ConsentSchema.safeParse({
+      id: UUID_A,
+      userId: UUID_B,
+      type: "camera",
+      termsVersion: "v1",
+      grantedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita type fora do enum", () => {
+    const result = ConsentSchema.safeParse({
+      id: UUID_A,
+      userId: UUID_B,
+      type: "microphone",
+      termsVersion: "v1",
+      grantedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("GrantConsentRequestSchema", () => {
+  it("aceita um pedido de consentimento válido", () => {
+    expect(GrantConsentRequestSchema.safeParse({ type: "camera", termsVersion: "v1" }).success).toBe(true);
+  });
+
+  it("rejeita termsVersion vazio", () => {
+    expect(GrantConsentRequestSchema.safeParse({ type: "camera", termsVersion: "" }).success).toBe(false);
+  });
+});
+
+describe("ConsentStatusSchema", () => {
+  it("aceita status concedido", () => {
+    const result = ConsentStatusSchema.safeParse({
+      type: "camera",
+      granted: true,
+      termsVersion: "v1",
+      grantedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita status não concedido (nulos)", () => {
+    const result = ConsentStatusSchema.safeParse({
+      type: "camera",
+      granted: false,
+      termsVersion: null,
+      grantedAt: null,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("MatchHistoryEntrySchema", () => {
+  it("aceita uma entrada de histórico válida", () => {
+    const result = MatchHistoryEntrySchema.safeParse({
+      matchId: UUID_A,
+      side: "player1",
+      status: "completed",
+      ratingBefore: 1000,
+      ratingAfter: 1012,
+      startedAt: NOW,
+      endedAt: NOW,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita side fora do enum", () => {
+    const result = MatchHistoryEntrySchema.safeParse({
+      matchId: UUID_A,
+      side: "player3",
+      status: "completed",
+      ratingBefore: 1000,
+      ratingAfter: 1012,
+      startedAt: NOW,
+      endedAt: NOW,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("UserDataExportSchema", () => {
+  const validUser = {
+    id: UUID_A,
+    email: "player@example.com",
+    displayName: "Player One",
+    avatarUrl: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+  const validProfile = {
+    userId: UUID_A,
+    nickname: "PlayerOne",
+    avatarUrl: null,
+    bio: null,
+    rating: 1000,
+    auraScoreAvg: null,
+    matchesPlayed: 0,
+    wins: 0,
+    losses: 0,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+
+  it("aceita um export completo", () => {
+    const result = UserDataExportSchema.safeParse({
+      user: validUser,
+      profile: validProfile,
+      consents: [{ id: UUID_A, userId: UUID_A, type: "camera", termsVersion: "v1", grantedAt: NOW }],
+      matchHistory: [],
+      exportedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita profile nulo (perfil ainda não criado)", () => {
+    const result = UserDataExportSchema.safeParse({
+      user: validUser,
+      profile: null,
+      consents: [],
+      matchHistory: [],
+      exportedAt: NOW,
+    });
+    expect(result.success).toBe(true);
   });
 });
