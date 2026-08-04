@@ -1,31 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-/**
- * Assina identificadores + nonce + timestamp/sequência, NUNCA os valores das
- * métricas — HMAC prova só "veio de quem tem o segredo" e "não é replay",
- * não que os números são verdadeiros. Conteúdo forjado é pego pelo /verify
- * (discrepancy) e pela checagem de plausibilidade temporal, não pela
- * assinatura.
- */
-export function buildFeaturesSigningPayload(input: {
-  matchId: string;
-  userId: string;
-  nonce: string;
-  sequence: number;
-  capturedAt: string;
-}): string {
-  return `${input.matchId}:${input.userId}:${input.nonce}:${input.sequence}:${input.capturedAt}`;
-}
-
-export function buildVerifyResponseSigningPayload(input: {
-  matchId: string;
-  userId: string;
-  challengeId: string;
-  nonce: string;
-  capturedAt: string;
-}): string {
-  return `${input.matchId}:${input.userId}:${input.challengeId}:${input.nonce}:${input.capturedAt}`;
-}
+// Strings canônicas assinadas vivem em `shared` — o cliente browser (Web
+// Crypto, apps/web) precisa montá-las de forma idêntica, então há uma única
+// fonte de verdade em vez de duas implementações que podem divergir.
+export { buildFeaturesSigningPayload, buildVerifyResponseSigningPayload } from "@aurafarming/shared";
 
 export function signHmac(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
