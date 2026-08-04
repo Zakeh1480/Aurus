@@ -1,4 +1,5 @@
 import { Zap } from "lucide-react";
+import Link from "next/link";
 
 import { QueueEntryButton } from "@/components/home/queue-entry-button";
 import { Badge } from "@/components/ui/badge";
@@ -25,8 +26,8 @@ export default function Home() {
 
       <div className="flex gap-3">
         <QueueEntryButton />
-        <Button size="lg" variant="outline">
-          Ver ranking
+        <Button asChild size="lg" variant="outline">
+          <Link href="/ranking">Ver ranking</Link>
         </Button>
       </div>
 

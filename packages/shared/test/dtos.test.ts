@@ -22,6 +22,7 @@ import { MatchSchema } from "../src/dtos/match.dto.js";
 import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.dto.js";
 import { RankingEntrySchema } from "../src/dtos/ranking-entry.dto.js";
 import { RankingListQuerySchema, RankingListResponseSchema } from "../src/dtos/ranking-list.dto.js";
+import { RankingMeResponseSchema } from "../src/dtos/ranking-me.dto.js";
 import { MatchHistoryEntrySchema, UserDataExportSchema } from "../src/dtos/user-data-export.dto.js";
 import { UserSchema } from "../src/dtos/user.dto.js";
 import { LivenessFlagsSchema, VerifyRequestSchema, VerifyResponseSchema } from "../src/dtos/verify.dto.js";
@@ -449,6 +450,46 @@ describe("RankingListResponseSchema", () => {
   it("aceita lista vazia (ninguém no ranking ainda)", () => {
     const result = RankingListResponseSchema.safeParse({ entries: [], limit: 20, offset: 0, total: 0 });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("RankingMeResponseSchema", () => {
+  it("aceita uma entry de ranking válida", () => {
+    const result = RankingMeResponseSchema.safeParse({
+      entry: {
+        rank: 4,
+        userId: UUID_A,
+        displayName: "Player One",
+        rating: 1050,
+        auraScoreAvg: 0.6,
+        matchesPlayed: 3,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita entry null (usuário ainda sem partidas registradas)", () => {
+    const result = RankingMeResponseSchema.safeParse({ entry: null });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita entry com matchesPlayed 0", () => {
+    const result = RankingMeResponseSchema.safeParse({
+      entry: {
+        rank: 1,
+        userId: UUID_A,
+        displayName: "Player One",
+        rating: 1000,
+        auraScoreAvg: 0,
+        matchesPlayed: 0,
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita corpo sem a chave entry", () => {
+    const result = RankingMeResponseSchema.safeParse({});
+    expect(result.success).toBe(false);
   });
 });
 
