@@ -472,6 +472,20 @@ describe("MatchHistoryEntrySchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("aceita ratingAfter nulo (partida ainda não terminou)", () => {
+    const result = MatchHistoryEntrySchema.safeParse({
+      matchId: UUID_A,
+      side: "player1",
+      status: "pending",
+      ratingBefore: 1000,
+      ratingAfter: null,
+      startedAt: null,
+      endedAt: null,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("UserDataExportSchema", () => {

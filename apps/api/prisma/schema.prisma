@@ -134,7 +134,8 @@ model MatchParticipant {
   userId       String
   side         MatchSide
   ratingBefore Int
-  ratingAfter  Int
+  /// null até a partida terminar e o resultado (Aura Score) ser gravado.
+  ratingAfter  Int?
   createdAt    DateTime  @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)

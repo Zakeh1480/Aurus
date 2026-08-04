@@ -28,6 +28,9 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
     queueStatus: "matched",
     matchedAt: NOW,
   },
+  "queue:accept": {
+    matchId: UUID_A,
+  },
   "match:start": {
     matchId: UUID_A,
     player1Id: UUID_A,
@@ -84,12 +87,13 @@ describe("WsEventSchemas", () => {
     expect(schema.safeParse(fixture).success).toBe(true);
   });
 
-  it("cobre exatamente os 9 eventos do contrato", () => {
+  it("cobre exatamente os 10 eventos do contrato", () => {
     expect(Object.keys(WsEventSchemas).sort()).toEqual(
       [
         "queue:join",
         "queue:leave",
         "queue:matched",
+        "queue:accept",
         "match:start",
         "match:features",
         "match:score-tick",
