@@ -21,6 +21,7 @@ import { MatchResultSchema } from "../src/dtos/match-result.dto.js";
 import { MatchSchema } from "../src/dtos/match.dto.js";
 import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.dto.js";
 import { RankingEntrySchema } from "../src/dtos/ranking-entry.dto.js";
+import { RankingListQuerySchema, RankingListResponseSchema } from "../src/dtos/ranking-list.dto.js";
 import { MatchHistoryEntrySchema, UserDataExportSchema } from "../src/dtos/user-data-export.dto.js";
 import { UserSchema } from "../src/dtos/user.dto.js";
 import { LivenessFlagsSchema, VerifyRequestSchema, VerifyResponseSchema } from "../src/dtos/verify.dto.js";
@@ -396,6 +397,58 @@ describe("RankingEntrySchema", () => {
       matchesPlayed: 10,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("RankingListQuerySchema", () => {
+  it("aplica defaults quando limit/offset não são informados", () => {
+    const result = RankingListQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ limit: 20, offset: 0 });
+    }
+  });
+
+  it("faz coerce de limit/offset vindos como string de query params", () => {
+    const result = RankingListQuerySchema.safeParse({ limit: "10", offset: "5" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ limit: 10, offset: 5 });
+    }
+  });
+
+  it("rejeita limit acima de 100", () => {
+    expect(RankingListQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
+  });
+
+  it("rejeita offset negativo", () => {
+    expect(RankingListQuerySchema.safeParse({ offset: -1 }).success).toBe(false);
+  });
+});
+
+describe("RankingListResponseSchema", () => {
+  it("aceita uma resposta paginada válida", () => {
+    const result = RankingListResponseSchema.safeParse({
+      entries: [
+        {
+          rank: 1,
+          userId: UUID_A,
+          displayName: "Player One",
+          rating: 1200,
+          auraScoreAvg: 0.75,
+          matchesPlayed: 10,
+        },
+      ],
+      limit: 20,
+      offset: 0,
+      total: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita lista vazia (ninguém no ranking ainda)", () => {
+    const result = RankingListResponseSchema.safeParse({ entries: [], limit: 20, offset: 0, total: 0 });
+    expect(result.success).toBe(true);
   });
 });
 

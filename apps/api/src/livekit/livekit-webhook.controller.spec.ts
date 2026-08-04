@@ -4,7 +4,7 @@ import type { Request } from "express";
 import type { WebhookEvent } from "livekit-server-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MatchmakingService } from "../matchmaking/matchmaking.service";
+import { ScoringService } from "../scoring/scoring.service";
 import { LivekitWebhookController } from "./livekit-webhook.controller";
 import { LivekitService } from "./livekit.service";
 
@@ -15,17 +15,17 @@ function fakeRequest(rawBody?: Buffer): RawBodyRequest<Request> {
 describe("LivekitWebhookController", () => {
   let controller: LivekitWebhookController;
   let livekit: { verifyWebhook: ReturnType<typeof vi.fn>; deleteRoom: ReturnType<typeof vi.fn> };
-  let matchmaking: { endActiveMatch: ReturnType<typeof vi.fn> };
+  let scoringService: { finalizeMatch: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     livekit = { verifyWebhook: vi.fn(), deleteRoom: vi.fn().mockResolvedValue(undefined) };
-    matchmaking = { endActiveMatch: vi.fn().mockResolvedValue(undefined) };
+    scoringService = { finalizeMatch: vi.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [LivekitWebhookController],
       providers: [
         { provide: LivekitService, useValue: livekit },
-        { provide: MatchmakingService, useValue: matchmaking },
+        { provide: ScoringService, useValue: scoringService },
       ],
     }).compile();
 
@@ -51,10 +51,10 @@ describe("LivekitWebhookController", () => {
     await expect(
       controller.handleWebhook(fakeRequest(Buffer.from("{}")), "assinatura-invalida"),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(matchmaking.endActiveMatch).not.toHaveBeenCalled();
+    expect(scoringService.finalizeMatch).not.toHaveBeenCalled();
   });
 
-  it("participant_left válido encerra a partida e apaga a room", async () => {
+  it("participant_left válido finaliza a partida via ScoringService e apaga a room", async () => {
     livekit.verifyWebhook.mockResolvedValue({
       event: "participant_left",
       room: { name: "match-123" },
@@ -62,7 +62,7 @@ describe("LivekitWebhookController", () => {
 
     const result = await controller.handleWebhook(fakeRequest(Buffer.from("{}")), "assinatura-valida");
 
-    expect(matchmaking.endActiveMatch).toHaveBeenCalledWith("match-123", "disconnected");
+    expect(scoringService.finalizeMatch).toHaveBeenCalledWith("match-123");
     expect(livekit.deleteRoom).toHaveBeenCalledWith("match-123");
     expect(result).toEqual({ received: true });
   });
@@ -75,7 +75,7 @@ describe("LivekitWebhookController", () => {
 
     const result = await controller.handleWebhook(fakeRequest(Buffer.from("{}")), "assinatura-valida");
 
-    expect(matchmaking.endActiveMatch).not.toHaveBeenCalled();
+    expect(scoringService.finalizeMatch).not.toHaveBeenCalled();
     expect(livekit.deleteRoom).not.toHaveBeenCalled();
     expect(result).toEqual({ received: true });
   });
