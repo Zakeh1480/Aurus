@@ -60,6 +60,25 @@ DTOs/enums de `packages/shared` — nenhum enum de domínio é redefinido fora d
 hard-delete — histórico de partidas (`Match`/`MatchParticipant`/`MatchResult`)
 não pode ser apagado via cascade.
 
+## Vídeo (LiveKit)
+
+As partidas usam [LiveKit Cloud](https://livekit.io/) para a chamada de vídeo
+1x1. Setup:
+
+1. Crie uma conta no LiveKit Cloud e um projeto; gere uma API key/secret.
+2. Preencha no `.env` da raiz: `LIVEKIT_URL` (`wss://<projeto>.livekit.cloud`),
+   `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.
+3. No painel do projeto, configure um webhook apontando para
+   `POST {API_URL}/livekit/webhook` (em dev local isso exige expor a API
+   publicamente, ex. `ngrok http 3001`).
+
+Fluxo: o front autenticado chama `POST /matches/:id/token` (Prompt 11) e
+recebe `{ token, url, roomName, identity, expiresAt }` para conectar via
+`livekit-client`, com `roomName === matchId`. Quando o LiveKit envia o evento
+`participant_left`, o backend encerra a partida (`Match.status = "cancelled"`,
+evento WS `match:end` com `reason: "disconnected"`) e fecha a room — o mesmo
+caminho que o Prompt 7 (scoring) já trata para partidas canceladas.
+
 ## Variáveis de ambiente
 
 Ver `.env.example` — o arquivo `.env` fica na raiz do monorepo mesmo para

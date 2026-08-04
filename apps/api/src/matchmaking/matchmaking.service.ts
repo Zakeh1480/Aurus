@@ -119,6 +119,26 @@ export class MatchmakingService {
     await this.queueService.leaveQueue(userId);
   }
 
+  /**
+   * Chamado pelo webhook do LiveKit quando um participante sai da room de uma
+   * partida em andamento. Idempotente (no-op se a partida já não está `active`)
+   * — não reaproveita `cancelPendingMatch` porque essa lida com estado de
+   * pareamento pendente em memória que não existe mais após o match virar `active`.
+   */
+  async endActiveMatch(matchId: string, reason: "disconnected" | "cancelled"): Promise<void> {
+    const match = await this.prisma.match.findUnique({ where: { id: matchId } });
+    if (match?.status !== "active") {
+      return;
+    }
+
+    const endedAt = new Date();
+    await this.prisma.match.update({ where: { id: matchId }, data: { status: "cancelled", endedAt } });
+
+    const endedAtIso = endedAt.toISOString();
+    this.emitTo(match.player1Id, "match:end", { matchId, endedAt: endedAtIso, reason });
+    this.emitTo(match.player2Id, "match:end", { matchId, endedAt: endedAtIso, reason });
+  }
+
   private async tryPairFrom(selfId: string, selfRating: number, now: number): Promise<void> {
     const config = getRatingWindowConfig();
     const rawCandidates = await this.queueService.findCandidates(selfRating, config.max);

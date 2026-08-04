@@ -9,6 +9,7 @@ import {
   RegisterRequestSchema,
 } from "../src/dtos/auth.dto.js";
 import { ConsentSchema, ConsentStatusSchema, GrantConsentRequestSchema } from "../src/dtos/consent.dto.js";
+import { LivekitTokenResponseSchema } from "../src/dtos/livekit-token.dto.js";
 import { MatchResultSchema } from "../src/dtos/match-result.dto.js";
 import { MatchSchema } from "../src/dtos/match.dto.js";
 import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.dto.js";
@@ -262,6 +263,41 @@ describe("MatchSchema", () => {
       startedAt: null,
       endedAt: null,
       createdAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("LivekitTokenResponseSchema", () => {
+  it("aceita uma resposta de token válida", () => {
+    const result = LivekitTokenResponseSchema.safeParse({
+      token: "jwt.livekit.token",
+      url: "wss://aurafarming.livekit.cloud",
+      roomName: UUID_A,
+      identity: UUID_B,
+      expiresAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita identity que não é uuid", () => {
+    const result = LivekitTokenResponseSchema.safeParse({
+      token: "jwt.livekit.token",
+      url: "wss://aurafarming.livekit.cloud",
+      roomName: UUID_A,
+      identity: "não-é-uuid",
+      expiresAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita expiresAt fora do formato ISO", () => {
+    const result = LivekitTokenResponseSchema.safeParse({
+      token: "jwt.livekit.token",
+      url: "wss://aurafarming.livekit.cloud",
+      roomName: UUID_A,
+      identity: UUID_B,
+      expiresAt: "amanhã",
     });
     expect(result.success).toBe(false);
   });
