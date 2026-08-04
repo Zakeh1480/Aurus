@@ -27,6 +27,15 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+/** Chamado no 401 de uma requisição autenticada; retorna o novo access token ou `null` se o refresh falhou. */
+type RefreshHandler = () => Promise<string | null>;
+let refreshHandler: RefreshHandler | null = null;
+
+/** Registrado pelo `AuthProvider` — mantém `api-client.ts` livre de import de React. */
+export function setRefreshHandler(handler: RefreshHandler | null): void {
+  refreshHandler = handler;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -45,11 +54,16 @@ type RequestOptions = {
   body?: unknown;
   /** Anexa `Authorization: Bearer` com o access token em memória. Default: true. */
   auth?: boolean;
-  /** Necessário só nas rotas que leem/escrevem o cookie httpOnly `af_refresh`. Default: "omit". */
+  /** Necessário só nas rotas que leem/escrevem o cookie httpOnly `refresh_token`. Default: "omit". */
   credentials?: RequestCredentials;
 };
 
-async function request<T>(path: string, schema: ZodParseable<T>, options: RequestOptions = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  schema: ZodParseable<T>,
+  options: RequestOptions = {},
+  isRetry = false,
+): Promise<T> {
   const { method = "GET", body, auth = true, credentials = "omit" } = options;
 
   const headers: Record<string, string> = {};
@@ -66,6 +80,16 @@ async function request<T>(path: string, schema: ZodParseable<T>, options: Reques
     credentials,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // Uma retentativa silenciosa via refresh — nunca para chamadas `auth: false`
+  // (login/register/refresh já não anexam o token) nem para a própria retentativa,
+  // o que garante no máximo uma chamada extra por requisição, sem loop.
+  if (response.status === 401 && auth && !isRetry && refreshHandler) {
+    const newToken = await refreshHandler();
+    if (newToken) {
+      return request(path, schema, options, true);
+    }
+  }
 
   const raw = response.status === 204 ? undefined : await response.json().catch(() => undefined);
 

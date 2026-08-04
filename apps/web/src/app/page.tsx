@@ -1,5 +1,6 @@
 import { Zap } from "lucide-react";
 
+import { QueueEntryButton } from "@/components/home/queue-entry-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,9 +24,7 @@ export default function Home() {
       </div>
 
       <div className="flex gap-3">
-        <Button size="lg" className="animate-glow-pulse">
-          Entrar na fila
-        </Button>
+        <QueueEntryButton />
         <Button size="lg" variant="outline">
           Ver ranking
         </Button>
