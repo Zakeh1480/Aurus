@@ -25,6 +25,8 @@ import { JwtStrategy } from "./jwt.strategy";
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  // JwtModule também é exportado para que MatchmakingModule injete o mesmo
+  // JwtService (mesma factory de segredo) sem duplicar registerAsync.
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

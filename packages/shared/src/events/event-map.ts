@@ -9,6 +9,7 @@ import {
   MatchVerifyChallengePayloadSchema,
 } from "./match.events.js";
 import {
+  QueueAcceptPayloadSchema,
   QueueJoinPayloadSchema,
   QueueLeavePayloadSchema,
   QueueMatchedPayloadSchema,
@@ -19,6 +20,7 @@ export const WsEventSchemas = {
   "queue:join": QueueJoinPayloadSchema,
   "queue:leave": QueueLeavePayloadSchema,
   "queue:matched": QueueMatchedPayloadSchema,
+  "queue:accept": QueueAcceptPayloadSchema,
   "match:start": MatchStartPayloadSchema,
   "match:features": MatchFeaturesPayloadSchema,
   "match:score-tick": MatchScoreTickPayloadSchema,

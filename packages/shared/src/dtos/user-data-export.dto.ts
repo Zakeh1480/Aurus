@@ -15,7 +15,8 @@ export const MatchHistoryEntrySchema = z.object({
   side: MatchSideSchema,
   status: MatchStatusSchema,
   ratingBefore: z.number().int(),
-  ratingAfter: z.number().int(),
+  /** null até a partida terminar e o resultado (Aura Score) ser gravado. */
+  ratingAfter: z.number().int().nullable(),
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),

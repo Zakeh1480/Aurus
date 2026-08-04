@@ -22,3 +22,9 @@ export const QueueMatchedPayloadSchema = z.object({
   matchedAt: z.iso.datetime(),
 });
 export type QueueMatchedPayload = z.infer<typeof QueueMatchedPayloadSchema>;
+
+/** client → server — confirma presença numa partida recém-pareada. */
+export const QueueAcceptPayloadSchema = z.object({
+  matchId: z.uuid(),
+});
+export type QueueAcceptPayload = z.infer<typeof QueueAcceptPayloadSchema>;

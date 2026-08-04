@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 import { NestFactory } from "@nestjs/core";
 
 import { AppModule } from "./app.module";
+import { MatchmakingIoAdapter } from "./matchmaking/matchmaking-io.adapter";
 
 // .env vive na raiz do monorepo (convenção do Prompt 0); compilado ou não,
 // este arquivo sempre roda a partir de apps/api/{src,dist}, então são 3
@@ -18,6 +19,8 @@ async function bootstrap() {
     origin: process.env["WEB_ORIGIN"] ?? "http://localhost:3000",
     credentials: true,
   });
+  // Depois do config() acima (env já populado) — ver matchmaking-io.adapter.ts.
+  app.useWebSocketAdapter(new MatchmakingIoAdapter(app));
   await app.listen(process.env["PORT"] ?? 3001);
 }
 
