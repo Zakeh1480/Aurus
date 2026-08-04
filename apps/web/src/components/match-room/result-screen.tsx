@@ -59,9 +59,12 @@ export function ResultScreen({ result, selfUserId }: ResultScreenProps) {
           Posição no ranking não faz parte deste resultado.
         </p>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex flex-col gap-2 sm:flex-row">
         <Button asChild className="w-full">
           <Link href="/fila">Jogar novamente</Link>
+        </Button>
+        <Button asChild variant="outline" className="w-full">
+          <Link href="/ranking">Ver ranking</Link>
         </Button>
       </CardFooter>
     </Card>

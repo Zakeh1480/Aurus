@@ -1,4 +1,11 @@
-import { type RankingEntry, RankingEntrySchema, type RankingListResponse, RankingListResponseSchema } from "@aurafarming/shared";
+import {
+  type RankingEntry,
+  RankingEntrySchema,
+  type RankingListResponse,
+  RankingListResponseSchema,
+  type RankingMeResponse,
+  RankingMeResponseSchema,
+} from "@aurafarming/shared";
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
@@ -124,5 +131,60 @@ export class RankingService {
       Prisma.sql`SELECT COUNT(DISTINCT "userId") AS count FROM ranking_snapshots`,
     );
     return Number(rows[0]?.count ?? 0);
+  }
+
+  async getMyRanking(userId: string): Promise<RankingMeResponse> {
+    const zsetTotal = await this.redis.zcard(RANKING_ZSET_KEY);
+    const entry =
+      zsetTotal > 0 ? await this.getMyRankingFromRedis(userId) : await this.getMyRankingFromPostgres(userId);
+
+    return RankingMeResponseSchema.parse({ entry });
+  }
+
+  private async getMyRankingFromRedis(userId: string): Promise<RankingEntry | null> {
+    const score = await this.redis.zscore(RANKING_ZSET_KEY, userId);
+    if (score === null) return null;
+
+    const zRank = await this.redis.zrevrank(RANKING_ZSET_KEY, userId);
+    const profile = await this.prisma.profile.findUnique({ where: { userId } });
+
+    return RankingEntrySchema.parse({
+      rank: (zRank ?? 0) + 1,
+      userId,
+      displayName: profile?.nickname ?? "—",
+      rating: Number(score),
+      auraScoreAvg: profile?.auraScoreAvg ?? 0,
+      matchesPlayed: profile?.matchesPlayed ?? 0,
+    } satisfies RankingEntry);
+  }
+
+  /**
+   * Mesmo cuidado de nível de empate que getRankingFromPostgres: rank é
+   * "quantos têm rating estritamente maior, + 1" — aproximação aceitável
+   * para o fallback frio, não uma classificação oficial de desempate.
+   */
+  private async getMyRankingFromPostgres(userId: string): Promise<RankingEntry | null> {
+    const rows = await this.prisma.$queryRaw<Array<SnapshotRow & { rank: bigint }>>(Prisma.sql`
+      WITH latest AS (
+        SELECT DISTINCT ON ("userId") "userId", "displayName", rating, "auraScoreAvg", "matchesPlayed"
+        FROM ranking_snapshots
+        ORDER BY "userId", "snapshotAt" DESC
+      )
+      SELECT me."userId", me."displayName", me.rating, me."auraScoreAvg", me."matchesPlayed",
+             (SELECT COUNT(*) FROM latest higher WHERE higher.rating > me.rating) + 1 AS rank
+      FROM latest me
+      WHERE me."userId" = ${userId}
+    `);
+    const row = rows[0];
+    if (!row) return null;
+
+    return RankingEntrySchema.parse({
+      rank: Number(row.rank),
+      userId: row.userId,
+      displayName: row.displayName,
+      rating: row.rating,
+      auraScoreAvg: row.auraScoreAvg,
+      matchesPlayed: row.matchesPlayed,
+    } satisfies RankingEntry);
   }
 }

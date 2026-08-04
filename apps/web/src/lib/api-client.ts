@@ -8,6 +8,7 @@ import {
   ProfileSchema,
   type RankingListQuery,
   RankingListResponseSchema,
+  RankingMeResponseSchema,
   type RegisterRequest,
   UserDataExportSchema,
   UserSchema,
@@ -144,4 +145,5 @@ export const matchesApi = {
 export const rankingApi = {
   list: (query: RankingListQuery) =>
     request(`/ranking?${toQueryString(query)}`, RankingListResponseSchema),
+  me: () => request("/ranking/me", RankingMeResponseSchema),
 };
