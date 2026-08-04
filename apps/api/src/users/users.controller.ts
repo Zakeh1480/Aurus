@@ -5,7 +5,7 @@ import {
   type User,
   type UserDataExport,
 } from "@aurafarming/shared";
-import { Body, Controller, Delete, Get, HttpCode, Patch, UseGuards, UsePipes } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Patch, UseGuards } from "@nestjs/common";
 
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -23,8 +23,13 @@ export class UsersController {
   }
 
   @Patch("profile")
-  @UsePipes(new ZodValidationPipe(UpdateProfileRequestSchema))
-  updateProfile(@CurrentUser() user: User, @Body() body: UpdateProfileRequest): Promise<Profile> {
+  updateProfile(
+    @CurrentUser() user: User,
+    // Pipe aplicado só ao parâmetro @Body() — um @UsePipes() de método roda contra
+    // TODOS os parâmetros do handler, inclusive @CurrentUser(), o que corrompia
+    // `user` (validado contra UpdateProfileRequestSchema, que não tem `id`/`email`).
+    @Body(new ZodValidationPipe(UpdateProfileRequestSchema)) body: UpdateProfileRequest,
+  ): Promise<Profile> {
     return this.usersService.updateProfile(user.id, body);
   }
 
