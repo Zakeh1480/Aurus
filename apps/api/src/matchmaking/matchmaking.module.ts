@@ -10,5 +10,7 @@ import { WsAuthService } from "./ws-auth.service";
 @Module({
   imports: [AuthModule, UsersModule],
   providers: [QueueService, WsAuthService, MatchmakingService, MatchmakingGateway],
+  // Exportado para o LivekitModule reaproveitar endActiveMatch (webhook do LiveKit).
+  exports: [MatchmakingService],
 })
 export class MatchmakingModule {}

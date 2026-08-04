@@ -13,7 +13,10 @@ import { MatchmakingIoAdapter } from "./matchmaking/matchmaking-io.adapter";
 config({ path: resolve(__dirname, "../../../.env") });
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true expõe req.rawBody (Buffer) em toda a app — necessário para
+  // o LivekitWebhookController validar a assinatura do webhook, que precisa
+  // do corpo bruto da requisição, não do JSON já parseado.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.use(cookieParser());
   app.enableCors({
     origin: process.env["WEB_ORIGIN"] ?? "http://localhost:3000",

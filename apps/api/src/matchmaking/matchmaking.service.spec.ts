@@ -43,7 +43,11 @@ describe("MatchmakingService", () => {
     claimPair: ReturnType<typeof vi.fn>;
   };
   let prisma: {
-    match: { findFirst: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+    match: {
+      findFirst: ReturnType<typeof vi.fn>;
+      findUnique: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
     $transaction: ReturnType<typeof vi.fn>;
   };
   let usersService: { getProfile: ReturnType<typeof vi.fn> };
@@ -65,7 +69,11 @@ describe("MatchmakingService", () => {
       matchParticipant: { createMany: vi.fn() },
     };
     prisma = {
-      match: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn().mockResolvedValue({}) },
+      match: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({}),
+      },
       $transaction: vi.fn((callback: (tx: typeof txMock) => unknown) => callback(txMock)),
     };
     usersService = { getProfile: vi.fn() };
@@ -303,6 +311,59 @@ describe("MatchmakingService", () => {
       await service.handleDisconnect("solo-user");
       expect(queueService.leaveQueue).toHaveBeenCalledWith("solo-user");
       expect(prisma.match.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("endActiveMatch — encerramento disparado pelo webhook do LiveKit", () => {
+    it("no-op quando a partida não existe", async () => {
+      prisma.match.findUnique.mockResolvedValue(null);
+
+      await service.endActiveMatch("match-inexistente", "disconnected");
+
+      expect(prisma.match.update).not.toHaveBeenCalled();
+    });
+
+    it("no-op quando a partida existe mas não está active", async () => {
+      prisma.match.findUnique.mockResolvedValue({
+        id: "match-1",
+        player1Id: "user-a",
+        player2Id: "user-b",
+        status: "cancelled",
+      });
+
+      await service.endActiveMatch("match-1", "disconnected");
+
+      expect(prisma.match.update).not.toHaveBeenCalled();
+    });
+
+    it("marca cancelled, seta endedAt e emite match:end (reason: disconnected) para os dois jogadores", async () => {
+      const socketA = fakeSocket();
+      const socketB = fakeSocket();
+      service.registerSocket("user-a", socketA);
+      service.registerSocket("user-b", socketB);
+      prisma.match.findUnique.mockResolvedValue({
+        id: "match-1",
+        player1Id: "user-a",
+        player2Id: "user-b",
+        status: "active",
+      });
+
+      await service.endActiveMatch("match-1", "disconnected");
+
+      expect(prisma.match.update).toHaveBeenCalledWith({
+        where: { id: "match-1" },
+        data: { status: "cancelled", endedAt: expect.any(Date) },
+      });
+      expect(socketA.emit).toHaveBeenCalledWith("match:end", {
+        matchId: "match-1",
+        endedAt: expect.any(String),
+        reason: "disconnected",
+      });
+      expect(socketB.emit).toHaveBeenCalledWith("match:end", {
+        matchId: "match-1",
+        endedAt: expect.any(String),
+        reason: "disconnected",
+      });
     });
   });
 });
