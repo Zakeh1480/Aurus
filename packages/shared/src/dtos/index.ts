@@ -10,5 +10,6 @@ export * from "./match-result.dto.js";
 export * from "./match.dto.js";
 export * from "./profile.dto.js";
 export * from "./ranking-entry.dto.js";
+export * from "./ranking-list.dto.js";
 export * from "./user-data-export.dto.js";
 export * from "./user.dto.js";

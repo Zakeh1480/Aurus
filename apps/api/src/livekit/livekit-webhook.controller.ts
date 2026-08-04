@@ -2,7 +2,7 @@ import { Controller, Headers, HttpCode, Post, Req, UnauthorizedException, type R
 import type { Request } from "express";
 import type { WebhookEvent } from "livekit-server-sdk";
 
-import { MatchmakingService } from "../matchmaking/matchmaking.service";
+import { ScoringService } from "../scoring/scoring.service";
 import { LivekitService } from "./livekit.service";
 
 /** Sem JwtAuthGuard — a autenticação aqui é a assinatura do LiveKit no header Authorization, não um JWT de usuário. */
@@ -10,7 +10,7 @@ import { LivekitService } from "./livekit.service";
 export class LivekitWebhookController {
   constructor(
     private readonly livekit: LivekitService,
-    private readonly matchmaking: MatchmakingService,
+    private readonly scoringService: ScoringService,
   ) {}
 
   @Post("webhook")
@@ -31,7 +31,10 @@ export class LivekitWebhookController {
     }
 
     if (event.event === "participant_left" && event.room?.name) {
-      await this.matchmaking.endActiveMatch(event.room.name, "disconnected");
+      // finalizeMatch decide entre encerrar com resultado (Prompt 7) ou
+      // descartar (trust score baixo/sem amostras) — encapsula o antigo
+      // fallback direto para MatchmakingService.endActiveMatch.
+      await this.scoringService.finalizeMatch(event.room.name);
       await this.livekit.deleteRoom(event.room.name);
     }
 

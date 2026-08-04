@@ -8,7 +8,9 @@ import { ConsentModule } from "./consent/consent.module";
 import { LivekitModule } from "./livekit/livekit.module";
 import { MatchmakingModule } from "./matchmaking/matchmaking.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { RankingModule } from "./ranking/ranking.module";
 import { RedisModule } from "./redis/redis.module";
+import { ScoringModule } from "./scoring/scoring.module";
 import { UsersModule } from "./users/users.module";
 
 @Module({
@@ -21,6 +23,8 @@ import { UsersModule } from "./users/users.module";
     MatchmakingModule,
     LivekitModule,
     AntiCheatModule,
+    ScoringModule,
+    RankingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
