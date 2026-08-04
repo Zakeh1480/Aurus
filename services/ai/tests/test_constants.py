@@ -2,7 +2,7 @@
 
 import math
 
-from app.constants import AURA_METRIC_KEYS, AURA_SCORE_VERSION, AURA_SCORE_WEIGHTS
+from app.constants import ANTI_CHEAT_VERSION, AURA_METRIC_KEYS, AURA_SCORE_VERSION, AURA_SCORE_WEIGHTS
 from app.schemas import AuraFeatures, AuraScoreBreakdown
 
 
@@ -26,3 +26,7 @@ def test_metric_keys_match_breakdown_model() -> None:
 
 def test_version_value() -> None:
     assert AURA_SCORE_VERSION == "aura-score-v1"
+
+
+def test_anti_cheat_version_value() -> None:
+    assert ANTI_CHEAT_VERSION == "anti-cheat-v1"

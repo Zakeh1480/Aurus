@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { AuraFeaturesSchema } from "../src/dtos/aura-features.dto.js";
 import { AuraScoreSchema } from "../src/dtos/aura-score.dto.js";
-import { AURA_METRIC_KEYS, AURA_SCORE_VERSION, AURA_SCORE_WEIGHTS } from "../src/constants.js";
+import {
+  ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH,
+  ANTI_CHEAT_TRUST_THRESHOLDS,
+  ANTI_CHEAT_VERSION,
+  AURA_METRIC_KEYS,
+  AURA_SCORE_VERSION,
+  AURA_SCORE_WEIGHTS,
+} from "../src/constants.js";
 
 describe("AURA_SCORE_VERSION", () => {
   it('é "aura-score-v1"', () => {
@@ -32,5 +39,25 @@ describe("AURA_METRIC_KEYS (guarda contra drift)", () => {
   it("bate com as chaves de AuraScoreSchema.breakdown", () => {
     const breakdownKeys = Object.keys(AuraScoreSchema.shape.breakdown.shape);
     expect(breakdownKeys.sort()).toEqual([...AURA_METRIC_KEYS].sort());
+  });
+});
+
+describe("ANTI_CHEAT_VERSION", () => {
+  it('é "anti-cheat-v1"', () => {
+    expect(ANTI_CHEAT_VERSION).toBe("anti-cheat-v1");
+  });
+});
+
+describe("ANTI_CHEAT_TRUST_THRESHOLDS", () => {
+  it("highMin e lowMax estão em [0,1] e highMin > lowMax", () => {
+    expect(ANTI_CHEAT_TRUST_THRESHOLDS.highMin).toBeGreaterThan(ANTI_CHEAT_TRUST_THRESHOLDS.lowMax);
+    expect(ANTI_CHEAT_TRUST_THRESHOLDS.highMin).toBeLessThanOrEqual(1);
+    expect(ANTI_CHEAT_TRUST_THRESHOLDS.lowMax).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH", () => {
+  it("é positivo", () => {
+    expect(ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH).toBeGreaterThan(0);
   });
 });

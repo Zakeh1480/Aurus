@@ -9,6 +9,12 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
+# opencv-python-headless (Prompt 6b, POST /verify) precisa dessas libs de
+# sistema mesmo na build "headless" — sem isso, `import cv2` falha com
+# "ImportError: libGL.so.1". Camada isolada, cacheável independente do código.
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Camada de dependências separada do código-fonte para cache de build eficiente.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev

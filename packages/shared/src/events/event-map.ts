@@ -7,6 +7,7 @@ import {
   MatchScoreTickPayloadSchema,
   MatchStartPayloadSchema,
   MatchVerifyChallengePayloadSchema,
+  MatchVerifyResponsePayloadSchema,
 } from "./match.events.js";
 import {
   QueueAcceptPayloadSchema,
@@ -25,6 +26,7 @@ export const WsEventSchemas = {
   "match:features": MatchFeaturesPayloadSchema,
   "match:score-tick": MatchScoreTickPayloadSchema,
   "match:verify-challenge": MatchVerifyChallengePayloadSchema,
+  "match:verify-response": MatchVerifyResponsePayloadSchema,
   "match:end": MatchEndPayloadSchema,
   "match:result": MatchResultPayloadSchema,
 } as const;

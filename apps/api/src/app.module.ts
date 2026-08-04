@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AntiCheatModule } from "./anti-cheat/anti-cheat.module";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { AuthModule } from "./auth/auth.module";
@@ -11,7 +12,16 @@ import { RedisModule } from "./redis/redis.module";
 import { UsersModule } from "./users/users.module";
 
 @Module({
-  imports: [PrismaModule, RedisModule, AuthModule, UsersModule, ConsentModule, MatchmakingModule, LivekitModule],
+  imports: [
+    PrismaModule,
+    RedisModule,
+    AuthModule,
+    UsersModule,
+    ConsentModule,
+    MatchmakingModule,
+    LivekitModule,
+    AntiCheatModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

@@ -26,3 +26,9 @@ AURA_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "presence": 0.15,
     "movement": 0.10,
 }
+
+# Espelho manual de ANTI_CHEAT_VERSION / ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH
+# (packages/shared/src/constants.ts) — Prompt 6b.
+ANTI_CHEAT_VERSION: Final[str] = "anti-cheat-v1"
+
+ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH: Final[int] = 400_000

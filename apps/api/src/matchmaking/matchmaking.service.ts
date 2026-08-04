@@ -253,4 +253,13 @@ export class MatchmakingService {
   private emitTo<E extends WsEventName>(userId: string, event: E, payload: WsEventPayload<E>): void {
     this.sockets.get(userId)?.emit(event, payload);
   }
+
+  /**
+   * Exposto para o AntiCheatModule emitir eventos server->client fora do
+   * fluxo de matchmaking (ex.: match:verify-challenge) — mesmo padrão de
+   * endActiveMatch já exportado para o LivekitModule.
+   */
+  emitToUser<E extends WsEventName>(userId: string, event: E, payload: WsEventPayload<E>): void {
+    this.emitTo(userId, event, payload);
+  }
 }
