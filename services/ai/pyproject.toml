@@ -2,4 +2,22 @@
 name = "aurafarming-ai"
 version = "0.0.0"
 requires-python = ">=3.12"
-description = "Serviço de scoring/verificação (FastAPI) — placeholder"
+description = "Serviço de scoring do Aura Score (FastAPI) — transforma AuraFeatures em AuraScore"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
