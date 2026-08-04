@@ -26,6 +26,18 @@ enum ConsentType {
   camera
 }
 
+enum TrustLevel {
+  high
+  medium
+  low
+}
+
+enum AntiCheatDecision {
+  valid
+  flagged
+  discarded
+}
+
 model User {
   id           String    @id @default(uuid(7))
   email        String    @unique
@@ -37,17 +49,18 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  profile              Profile?
-  refreshTokens        RefreshToken[]
-  consents             Consent[]
-  matchParticipations  MatchParticipant[]
-  matchesAsPlayer1     Match[]            @relation("MatchPlayer1")
-  matchesAsPlayer2     Match[]            @relation("MatchPlayer2")
-  matchesWon           Match[]            @relation("MatchWinner")
-  resultsAsPlayer1     MatchResult[]      @relation("MatchResultPlayer1")
-  resultsAsPlayer2     MatchResult[]      @relation("MatchResultPlayer2")
-  resultsWon           MatchResult[]      @relation("MatchResultWinner")
-  rankingSnapshots     RankingSnapshot[]
+  profile             Profile?
+  refreshTokens       RefreshToken[]
+  consents            Consent[]
+  matchParticipations MatchParticipant[]
+  matchesAsPlayer1    Match[]             @relation("MatchPlayer1")
+  matchesAsPlayer2    Match[]             @relation("MatchPlayer2")
+  matchesWon          Match[]             @relation("MatchWinner")
+  resultsAsPlayer1    MatchResult[]       @relation("MatchResultPlayer1")
+  resultsAsPlayer2    MatchResult[]       @relation("MatchResultPlayer2")
+  resultsWon          MatchResult[]       @relation("MatchResultWinner")
+  rankingSnapshots    RankingSnapshot[]
+  antiCheatIncidents  AntiCheatIncident[]
 
   @@map("users")
 }
@@ -72,12 +85,12 @@ model Profile {
 }
 
 model RefreshToken {
-  id         String    @id @default(uuid(7))
-  userId     String
-  tokenHash  String    @unique
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(uuid(7))
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -86,11 +99,11 @@ model RefreshToken {
 }
 
 model Consent {
-  id            String      @id @default(uuid(7))
-  userId        String
-  type          ConsentType
-  termsVersion  String
-  grantedAt     DateTime    @default(now())
+  id           String      @id @default(uuid(7))
+  userId       String
+  type         ConsentType
+  termsVersion String
+  grantedAt    DateTime    @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
@@ -99,28 +112,29 @@ model Consent {
 }
 
 model Match {
-  id             String      @id @default(uuid(7))
-  player1Id      String
-  player2Id      String
-  status         MatchStatus @default(pending)
+  id              String      @id @default(uuid(7))
+  player1Id       String
+  player2Id       String
+  status          MatchStatus @default(pending)
   /// Carimbo de AURA_SCORE_VERSION (packages/shared) no momento do score.
-  scoreVersion   String?
+  scoreVersion    String?
   /// Último AuraFeatures (packages/shared) recebido de cada jogador — estado ao vivo.
   featuresPlayer1 Json?
   featuresPlayer2 Json?
   /// Último AuraScore (packages/shared) calculado para cada jogador — estado ao vivo.
-  scorePlayer1   Json?
-  scorePlayer2   Json?
-  winnerId       String?
-  startedAt      DateTime?
-  endedAt        DateTime?
-  createdAt      DateTime    @default(now())
+  scorePlayer1    Json?
+  scorePlayer2    Json?
+  winnerId        String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime    @default(now())
 
-  player1      User               @relation("MatchPlayer1", fields: [player1Id], references: [id], onDelete: Restrict)
-  player2      User               @relation("MatchPlayer2", fields: [player2Id], references: [id], onDelete: Restrict)
-  winner       User?              @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: Restrict)
-  participants MatchParticipant[]
-  result       MatchResult?
+  player1            User                @relation("MatchPlayer1", fields: [player1Id], references: [id], onDelete: Restrict)
+  player2            User                @relation("MatchPlayer2", fields: [player2Id], references: [id], onDelete: Restrict)
+  winner             User?               @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: Restrict)
+  participants       MatchParticipant[]
+  result             MatchResult?
+  antiCheatIncidents AntiCheatIncident[]
 
   @@index([player1Id])
   @@index([player2Id])
@@ -188,4 +202,36 @@ model RankingSnapshot {
   @@index([snapshotAt, rank])
   @@index([userId])
   @@map("ranking_snapshots")
+}
+
+/// Registrado pelo AntiCheatModule (Prompt 6b) sempre que a decisão para um
+/// participante não é "valid" — alimenta moderação assíncrona (Prompt 13).
+/// Não existe um por partida legítima: resultado válido não gera linha aqui.
+model AntiCheatIncident {
+  id                     String            @id @default(uuid(7))
+  matchId                String
+  userId                 String
+  decision               AntiCheatDecision
+  trustLevel             TrustLevel
+  trustScore             Float
+  /// Média de `discrepancy` dos /verify concluídos; null se nenhum foi concluído.
+  discrepancyAvg         Float?
+  rejectedPacketRatio    Float
+  temporalViolationCount Int
+  challengesIssued       Int
+  challengesAnswered     Int
+  /// Contagens de flags de liveness + qualquer contexto extra — Json para não engessar o shape a cada novo flag.
+  detail                 Json
+  /// Carimbo de ANTI_CHEAT_VERSION (packages/shared) no momento da avaliação.
+  version                String
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([matchId, userId])
+  @@index([userId])
+  @@index([decision])
+  @@map("anti_cheat_incidents")
 }

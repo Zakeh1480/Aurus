@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH } from "../constants.js";
 import { AuraFeaturesSchema } from "../dtos/aura-features.dto.js";
 import { MatchResultSchema } from "../dtos/match-result.dto.js";
 
@@ -12,11 +13,17 @@ export const MatchStartPayloadSchema = z.object({
 });
 export type MatchStartPayload = z.infer<typeof MatchStartPayloadSchema>;
 
-/** client → server */
+/**
+ * client → server. `nonce`/`signature` ligam o pacote à sessão
+ * (matchId+userId) e impedem replay (Prompt 6b) — ver AntiCheatModule
+ * (apps/api) para o formato exato assinado.
+ */
 export const MatchFeaturesPayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
   features: AuraFeaturesSchema,
+  nonce: z.string().min(16),
+  signature: z.string().min(32),
 });
 export type MatchFeaturesPayload = z.infer<typeof MatchFeaturesPayloadSchema>;
 
@@ -36,18 +43,39 @@ export const MatchScoreTickPayloadSchema = z.object({
 export type MatchScoreTickPayload = z.infer<typeof MatchScoreTickPayloadSchema>;
 
 /**
- * server → client. `challengeType` fica livre (string) de propósito — o
- * formato do anti-cheat é definido no Prompt 6b, não travamos aqui.
+ * server → client. Formato final do anti-cheat (Prompt 6b) — `challengeType`
+ * hoje só tem "snapshot" (pull de frame direto do LiveKit egress é stretch
+ * goal do prompt original, não implementado). `nonce` liga a resposta do
+ * cliente (match:verify-response) a este desafio específico.
  */
 export const MatchVerifyChallengePayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
   challengeId: z.uuid(),
-  challengeType: z.string().min(1),
+  challengeType: z.enum(["snapshot"]),
+  nonce: z.string().min(16),
   issuedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
 });
 export type MatchVerifyChallengePayload = z.infer<typeof MatchVerifyChallengePayloadSchema>;
+
+/**
+ * client → server. Resposta a match:verify-challenge — snapshot único
+ * (keyframe) + features reivindicadas para aquele instante + assinatura
+ * HMAC (Prompt 6b). O AntiCheatModule reencaminha para POST /verify no
+ * serviço de IA depois de validar nonce+assinatura.
+ */
+export const MatchVerifyResponsePayloadSchema = z.object({
+  matchId: z.uuid(),
+  userId: z.uuid(),
+  challengeId: z.uuid(),
+  nonce: z.string().min(16),
+  capturedAt: z.iso.datetime(),
+  keyframeBase64: z.string().min(1).max(ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH),
+  claimedFeatures: AuraFeaturesSchema,
+  signature: z.string().min(32),
+});
+export type MatchVerifyResponsePayload = z.infer<typeof MatchVerifyResponsePayloadSchema>;
 
 /** server → ambos jogadores */
 export const MatchEndPayloadSchema = z.object({

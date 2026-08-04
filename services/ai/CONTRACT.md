@@ -140,10 +140,79 @@ não influenciam o score nem a ordem de agregação.
 | `samples` vazio | `{"samples": []}` |
 | Qualquer amostra inválida | mesmas regras de `/score`, com `loc` indexado pela posição da amostra |
 
-## Nota para o Prompt 6b (anti-cheat)
+## `POST /verify` (Prompt 6b — anti-cheat)
 
-`app/scoring.py` (`compute_score`, `aggregate_scores`) e `app/schemas.py`
-(`AuraFeatures`, `AuraScore`) não importam nada de `fastapi`/HTTP — são
-importáveis diretamente por qualquer código Python no mesmo processo (ex.:
-uma futura rota `/verify` neste mesmo serviço), sem precisar de uma chamada
-HTTP interna.
+Recebe **um único keyframe** (imagem, base64) + as features reivindicadas
+pelo cliente para aquele instante, reavalia server-side com heurísticas
+OpenCV de baixo custo (Haar cascade + variância de Laplaciano — **não**
+MediaPipe: verificação por amostragem exige custo/latência baixos) e retorna
+uma `discrepancy` normalizada + flags de liveness single-frame.
+
+Só `presence`/`eyeContact` são reavaliáveis por este heurístico —
+`posture`/`expression`/`movement` exigiriam pose estimation completa e não
+contribuem para `discrepancy` (`discrepancyConfidence` reflete isso: hoje
+sempre `1.0`, soma dos pesos das dimensões reavaliáveis).
+
+Comparação **temporal** entre múltiplos keyframes de uma mesma partida
+(detectar replay/loop de vídeo pré-gravado) é responsabilidade do
+`AntiCheatModule` em `apps/api`, não deste endpoint — que é stateless e
+avalia sempre um único frame isolado.
+
+**Request** — `VerifyRequest`:
+
+```json
+{
+  "matchId": "123e4567-e89b-12d3-a456-426614174000",
+  "userId": "223e4567-e89b-12d3-a456-426614174001",
+  "challengeId": "323e4567-e89b-12d3-a456-426614174002",
+  "keyframeBase64": "<base64 de um JPEG/PNG>",
+  "claimedFeatures": {
+    "posture": 0.8, "eyeContact": 0.7, "expression": 0.6, "presence": 0.9, "movement": 0.5,
+    "sequence": 12, "capturedAt": "2026-01-01T00:00:24.000Z"
+  }
+}
+```
+
+**Response 200** — `VerifyResponse`:
+
+```json
+{
+  "matchId": "123e4567-e89b-12d3-a456-426614174000",
+  "userId": "223e4567-e89b-12d3-a456-426614174001",
+  "challengeId": "323e4567-e89b-12d3-a456-426614174002",
+  "discrepancy": 0.12,
+  "discrepancyConfidence": 1.0,
+  "liveness": {
+    "noFaceDetected": false,
+    "staticImageSuspected": false,
+    "lowDetailSuspected": false,
+    "multipleFacesDetected": false
+  },
+  "version": "anti-cheat-v1",
+  "computedAt": "2026-08-04T03:07:36.487Z"
+}
+```
+
+**Erros (422)**:
+
+| Caso | Exemplo |
+|---|---|
+| `keyframeBase64` ausente/vazio | campo faltando no body |
+| `keyframeBase64` não é base64 válido | `"not-base64!!!"` |
+| bytes decodificados não formam uma imagem suportada | base64 válido de `"not an image"` |
+| `claimedFeatures` com métrica fora de `[0, 1]` | `posture: 1.5` |
+| `matchId`/`userId`/`challengeId` não é um UUID | `matchId: "not-a-uuid"` |
+| Campo desconhecido no body | `extra: "nope"` |
+
+Thresholds (`ANTI_CHEAT_BLUR_VARIANCE_STATIC_THRESHOLD`,
+`ANTI_CHEAT_BLUR_VARIANCE_LOW_DETAIL_THRESHOLD`, `ANTI_CHEAT_FACE_MIN_AREA_RATIO`)
+são configuráveis via env (`.env.example`).
+
+## Nota para o Prompt 6b (anti-cheat) — implementado
+
+`app/scoring.py` (`compute_score`, `aggregate_scores`), `app/verification.py`
+(`verify`, `detect_face_presence`, `compute_blur_variance`, `compute_discrepancy`)
+e `app/schemas.py` não importam nada de `fastapi`/HTTP — são importáveis
+diretamente por qualquer código Python no mesmo processo, sem precisar de
+chamada HTTP interna. `apps/api`'s `AntiCheatModule` consome `/verify` via
+HTTP (não em processo, já que é um serviço Node separado).

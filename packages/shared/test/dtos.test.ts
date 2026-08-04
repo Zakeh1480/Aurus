@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  AntiCheatIncidentSchema,
+  LivenessFlagCountsSchema,
+  MatchTrustDecisionSchema,
+  TrustAssessmentSchema,
+} from "../src/dtos/anti-cheat.dto.js";
+import { AntiCheatSessionSecretResponseSchema } from "../src/dtos/anti-cheat-session.dto.js";
 import { AuraFeaturesSchema } from "../src/dtos/aura-features.dto.js";
 import { AuraScoreSchema } from "../src/dtos/aura-score.dto.js";
 import {
@@ -16,6 +23,7 @@ import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.d
 import { RankingEntrySchema } from "../src/dtos/ranking-entry.dto.js";
 import { MatchHistoryEntrySchema, UserDataExportSchema } from "../src/dtos/user-data-export.dto.js";
 import { UserSchema } from "../src/dtos/user.dto.js";
+import { LivenessFlagsSchema, VerifyRequestSchema, VerifyResponseSchema } from "../src/dtos/verify.dto.js";
 
 const UUID_A = "123e4567-e89b-12d3-a456-426614174000";
 const UUID_B = "223e4567-e89b-12d3-a456-426614174001";
@@ -565,6 +573,264 @@ describe("UserDataExportSchema", () => {
       consents: [],
       matchHistory: [],
       exportedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("AntiCheatSessionSecretResponseSchema", () => {
+  it("aceita uma resposta válida", () => {
+    const result = AntiCheatSessionSecretResponseSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      sessionSecret: "s".repeat(32),
+      expiresAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita sessionSecret menor que 32 caracteres", () => {
+    const result = AntiCheatSessionSecretResponseSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      sessionSecret: "curto",
+      expiresAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+const VALID_CLAIMED_FEATURES = {
+  posture: 0.5,
+  eyeContact: 0.5,
+  expression: 0.5,
+  presence: 0.5,
+  movement: 0.5,
+  sequence: 0,
+  capturedAt: NOW,
+};
+
+describe("VerifyRequestSchema", () => {
+  it("aceita uma requisição válida", () => {
+    const result = VerifyRequestSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      challengeId: UUID_A,
+      keyframeBase64: "ZmFrZS1rZXlmcmFtZQ==",
+      claimedFeatures: VALID_CLAIMED_FEATURES,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita keyframeBase64 vazio", () => {
+    const result = VerifyRequestSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      challengeId: UUID_A,
+      keyframeBase64: "",
+      claimedFeatures: VALID_CLAIMED_FEATURES,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("LivenessFlagsSchema", () => {
+  it("aceita todas as flags", () => {
+    const result = LivenessFlagsSchema.safeParse({
+      noFaceDetected: false,
+      staticImageSuspected: true,
+      lowDetailSuspected: false,
+      multipleFacesDetected: false,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("VerifyResponseSchema", () => {
+  const validLiveness = {
+    noFaceDetected: false,
+    staticImageSuspected: false,
+    lowDetailSuspected: false,
+    multipleFacesDetected: false,
+  };
+
+  it("aceita uma resposta válida", () => {
+    const result = VerifyResponseSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      challengeId: UUID_A,
+      discrepancy: 0.1,
+      discrepancyConfidence: 1.0,
+      liveness: validLiveness,
+      version: "anti-cheat-v1",
+      computedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita discrepancy maior que 1", () => {
+    const result = VerifyResponseSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      challengeId: UUID_A,
+      discrepancy: 1.5,
+      discrepancyConfidence: 1.0,
+      liveness: validLiveness,
+      version: "anti-cheat-v1",
+      computedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("LivenessFlagCountsSchema x LivenessFlagsSchema (guarda contra drift)", () => {
+  it("toda flag de LivenessFlagsSchema tem uma contagem correspondente em LivenessFlagCountsSchema", () => {
+    const flagKeys = Object.keys(LivenessFlagsSchema.shape);
+    const countKeys = Object.keys(LivenessFlagCountsSchema.shape);
+    const expectedCountKeys = flagKeys.map((key) => `${key}Count`);
+    expect(expectedCountKeys.every((key) => countKeys.includes(key))).toBe(true);
+    expect(countKeys.filter((key) => !expectedCountKeys.includes(key))).toEqual(["duplicateKeyframeCount"]);
+  });
+});
+
+describe("TrustAssessmentSchema", () => {
+  const validLivenessFlagCounts = {
+    noFaceDetectedCount: 0,
+    staticImageSuspectedCount: 0,
+    lowDetailSuspectedCount: 0,
+    multipleFacesDetectedCount: 0,
+    duplicateKeyframeCount: 0,
+  };
+
+  it("aceita uma avaliação válida", () => {
+    const result = TrustAssessmentSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      trustScore: 0.9,
+      trustLevel: "high",
+      decision: "valid",
+      discrepancyAvg: 0.05,
+      livenessFlagCounts: validLivenessFlagCounts,
+      rejectedPacketRatio: 0,
+      temporalViolationCount: 0,
+      challengesIssued: 3,
+      challengesAnswered: 3,
+      version: "anti-cheat-v1",
+      evaluatedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita discrepancyAvg nulo (nenhum /verify concluído)", () => {
+    const result = TrustAssessmentSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      trustScore: 0.5,
+      trustLevel: "medium",
+      decision: "flagged",
+      discrepancyAvg: null,
+      livenessFlagCounts: validLivenessFlagCounts,
+      rejectedPacketRatio: 0,
+      temporalViolationCount: 0,
+      challengesIssued: 2,
+      challengesAnswered: 0,
+      version: "anti-cheat-v1",
+      evaluatedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita trustLevel fora do enum", () => {
+    const result = TrustAssessmentSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      trustScore: 0.9,
+      trustLevel: "critical",
+      decision: "valid",
+      discrepancyAvg: 0.05,
+      livenessFlagCounts: validLivenessFlagCounts,
+      rejectedPacketRatio: 0,
+      temporalViolationCount: 0,
+      challengesIssued: 3,
+      challengesAnswered: 3,
+      version: "anti-cheat-v1",
+      evaluatedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita trustScore maior que 1", () => {
+    const result = TrustAssessmentSchema.safeParse({
+      matchId: UUID_A,
+      userId: UUID_B,
+      trustScore: 1.5,
+      trustLevel: "high",
+      decision: "valid",
+      discrepancyAvg: 0.05,
+      livenessFlagCounts: validLivenessFlagCounts,
+      rejectedPacketRatio: 0,
+      temporalViolationCount: 0,
+      challengesIssued: 3,
+      challengesAnswered: 3,
+      version: "anti-cheat-v1",
+      evaluatedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("MatchTrustDecisionSchema", () => {
+  const validAssessment = {
+    matchId: UUID_A,
+    userId: UUID_B,
+    trustScore: 0.9,
+    trustLevel: "high" as const,
+    decision: "valid" as const,
+    discrepancyAvg: 0.05,
+    livenessFlagCounts: {
+      noFaceDetectedCount: 0,
+      staticImageSuspectedCount: 0,
+      lowDetailSuspectedCount: 0,
+      multipleFacesDetectedCount: 0,
+      duplicateKeyframeCount: 0,
+    },
+    rejectedPacketRatio: 0,
+    temporalViolationCount: 0,
+    challengesIssued: 3,
+    challengesAnswered: 3,
+    version: "anti-cheat-v1" as const,
+    evaluatedAt: NOW,
+  };
+
+  it("aceita uma decisão válida", () => {
+    const result = MatchTrustDecisionSchema.safeParse({
+      matchId: UUID_A,
+      player1: validAssessment,
+      player2: { ...validAssessment, userId: UUID_A },
+      overallDecision: "valid",
+      evaluatedAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("AntiCheatIncidentSchema", () => {
+  it("aceita um incidente válido", () => {
+    const result = AntiCheatIncidentSchema.safeParse({
+      id: UUID_A,
+      matchId: UUID_A,
+      userId: UUID_B,
+      decision: "discarded",
+      trustLevel: "low",
+      trustScore: 0.1,
+      discrepancyAvg: 0.8,
+      rejectedPacketRatio: 0.5,
+      temporalViolationCount: 4,
+      challengesIssued: 3,
+      challengesAnswered: 2,
+      detail: { reason: "static image suspected" },
+      version: "anti-cheat-v1",
+      createdAt: NOW,
     });
     expect(result.success).toBe(true);
   });
