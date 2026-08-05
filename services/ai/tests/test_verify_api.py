@@ -3,7 +3,12 @@
 from fastapi.testclient import TestClient
 
 from app.constants import ANTI_CHEAT_VERSION
-from tests.fixtures import encode_image_base64, make_flat_image, make_noisy_image, make_verify_request
+from tests.fixtures import (
+    encode_image_base64,
+    make_flat_image,
+    make_noisy_image,
+    make_verify_request,
+)
 
 
 def test_verify_valid_request_returns_200_with_expected_shape(client: TestClient) -> None:

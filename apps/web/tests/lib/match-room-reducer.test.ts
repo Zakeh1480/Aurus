@@ -54,7 +54,7 @@ describe("reduceMatchRoomState", () => {
   });
 
   it("mantém o último score válido se um SCORE_TICK não contiver o próprio userId", () => {
-    const withScores: MatchRoomState = { status: "live", scores: { self: 0.4, opponent: 0.9 }, pendingChallenge: null };
+    const withScores: MatchRoomState = { status: "live", scores: { self: 0.4, opponent: 0.9, opponentId: OPPONENT }, pendingChallenge: null };
     const badTick: MatchScoreTickPayload = {
       matchId: MATCH_ID,
       tickAt: "2026-01-01T00:00:10.000Z",
