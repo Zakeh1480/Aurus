@@ -19,6 +19,12 @@ variables:
     - corepack prepare pnpm@10.32.1 --activate
     - pnpm config set store-dir "$PNPM_STORE_PATH"
     - pnpm install --frozen-lockfile
+    # @prisma/client não está em pnpm.onlyBuiltDependencies (package.json raiz),
+    # então seu postinstall (que geraria o client) fica bloqueado pelo pnpm —
+    # sem isso, lint/typecheck/test/build falham em runner limpo com
+    # "Cannot find module '.prisma/client/default'". Mesmo passo do
+    # apps/api/Dockerfile.
+    - pnpm --filter @aurafarming/api exec prisma generate --schema=prisma/schema.prisma
   cache:
     key:
       files:
