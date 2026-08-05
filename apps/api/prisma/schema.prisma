@@ -24,6 +24,7 @@ enum MatchSide {
 
 enum ConsentType {
   camera
+  terms
 }
 
 enum TrustLevel {
@@ -38,6 +39,34 @@ enum AntiCheatDecision {
   discarded
 }
 
+enum Role {
+  user
+  moderator
+}
+
+enum ReportReason {
+  cheating
+  harassment
+  inappropriate_camera_content
+  other
+}
+
+enum ReportStatus {
+  open
+  resolved
+}
+
+enum ModerationActionType {
+  dismissed
+  warned
+  banned
+}
+
+enum ReportSource {
+  manual
+  anti_cheat
+}
+
 model User {
   id           String    @id @default(uuid(7))
   email        String    @unique
@@ -46,6 +75,8 @@ model User {
   avatarUrl    String?
   /// LGPD: null = conta ativa; timestamp = conta anonimizada (nunca hard-delete).
   anonymizedAt DateTime?
+  /// Papel de moderação — bootstrap via MODERATION_BOOTSTRAP_EMAILS (Prompt 13), sem UI de promoção.
+  role         Role      @default(user)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -61,6 +92,12 @@ model User {
   resultsWon          MatchResult[]       @relation("MatchResultWinner")
   rankingSnapshots    RankingSnapshot[]
   antiCheatIncidents  AntiCheatIncident[]
+  reportsFiled        Report[]            @relation("ReportsFiled")
+  reportsReceived     Report[]            @relation("ReportsReceived")
+  reportsResolved     Report[]            @relation("ReportsResolved")
+  bansReceived        Ban[]               @relation("BanTarget")
+  bansIssued          Ban[]               @relation("BanIssuedBy")
+  bansLifted          Ban[]               @relation("BanLiftedBy")
 
   @@map("users")
 }
@@ -135,6 +172,7 @@ model Match {
   participants       MatchParticipant[]
   result             MatchResult?
   antiCheatIncidents AntiCheatIncident[]
+  reports            Report[]
 
   @@index([player1Id])
   @@index([player2Id])
@@ -229,9 +267,70 @@ model AntiCheatIncident {
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// Presente quando o incidente auto-gerou uma entrada na fila de moderação (Prompt 13, source=anti_cheat).
+  report Report?
 
   @@unique([matchId, userId])
   @@index([userId])
   @@index([decision])
   @@map("anti_cheat_incidents")
+}
+
+/// Caso de moderação — criado manualmente (denúncia de um jogador) ou
+/// automaticamente pelo AntiCheatModule (source=anti_cheat, sem reporter humano)
+/// quando um incidente não-"valid" é persistido. Fila revisada por usuários
+/// com role=moderator; nenhuma ação é tomada automaticamente (Prompt 13).
+model Report {
+  id                  String                @id @default(uuid(7))
+  reporterId          String?
+  reportedId          String
+  matchId             String?
+  /// Chave de upsert idempotente para reports auto-gerados — evita duplicar
+  /// entradas quando o mesmo incidente é reavaliado/repersistido.
+  antiCheatIncidentId String?               @unique
+  source              ReportSource          @default(manual)
+  reason              ReportReason
+  details             String?
+  status              ReportStatus          @default(open)
+  action              ModerationActionType?
+  resolutionNote      String?
+  resolvedById        String?
+  resolvedAt          DateTime?
+  banId               String?               @unique
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  reporter          User?              @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Restrict)
+  reported          User               @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Restrict)
+  match             Match?             @relation(fields: [matchId], references: [id], onDelete: Restrict)
+  antiCheatIncident AntiCheatIncident? @relation(fields: [antiCheatIncidentId], references: [id], onDelete: Restrict)
+  resolvedBy        User?              @relation("ReportsResolved", fields: [resolvedById], references: [id], onDelete: Restrict)
+  ban               Ban?               @relation(fields: [banId], references: [id], onDelete: Restrict)
+
+  @@index([reportedId])
+  @@index([status])
+  @@index([matchId])
+  @@map("reports")
+}
+
+/// Registro append-only de bans — nunca é hard-deletado; "levantar" um ban é
+/// uma transição gravada (liftedAt/liftedById), não uma remoção de linha.
+model Ban {
+  id         String    @id @default(uuid(7))
+  userId     String
+  issuedById String
+  reason     String
+  /// null = permanente. Duração é sempre escolha explícita do moderador (Prompt 13) — sem threshold automático.
+  expiresAt  DateTime?
+  liftedAt   DateTime?
+  liftedById String?
+  createdAt  DateTime  @default(now())
+
+  user     User    @relation("BanTarget", fields: [userId], references: [id], onDelete: Restrict)
+  issuedBy User    @relation("BanIssuedBy", fields: [issuedById], references: [id], onDelete: Restrict)
+  liftedBy User?   @relation("BanLiftedBy", fields: [liftedById], references: [id], onDelete: Restrict)
+  report   Report?
+
+  @@index([userId])
+  @@map("bans")
 }

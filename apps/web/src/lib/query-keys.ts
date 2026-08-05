@@ -5,3 +5,7 @@ export const consentStatusQueryKey = ["users", "me", "consents", "status"] as co
 export const rankingListBaseQueryKey = ["ranking", "list"] as const;
 export const rankingListQueryKey = (limit: number) => [...rankingListBaseQueryKey, limit] as const;
 export const rankingMeQueryKey = ["ranking", "me"] as const;
+
+export const moderationReportsBaseQueryKey = ["moderation", "reports"] as const;
+export const moderationReportsQueryKey = (status?: string) => [...moderationReportsBaseQueryKey, status ?? "all"] as const;
+export const moderationReportDetailQueryKey = (id: string) => ["moderation", "reports", id] as const;

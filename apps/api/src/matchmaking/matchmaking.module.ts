@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 
 import { AuthModule } from "../auth/auth.module";
+import { WsRateLimiterService } from "../common/ws-rate-limiter.service";
 import { UsersModule } from "../users/users.module";
 import { MatchmakingGateway } from "./matchmaking.gateway";
 import { MatchmakingService } from "./matchmaking.service";
@@ -9,7 +10,7 @@ import { WsAuthService } from "./ws-auth.service";
 
 @Module({
   imports: [AuthModule, UsersModule],
-  providers: [QueueService, WsAuthService, MatchmakingService, MatchmakingGateway],
+  providers: [QueueService, WsAuthService, MatchmakingService, MatchmakingGateway, WsRateLimiterService],
   // Exportado para o LivekitModule reaproveitar endActiveMatch (webhook do LiveKit).
   exports: [MatchmakingService],
 })

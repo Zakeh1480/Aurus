@@ -5,6 +5,7 @@ import type { Server, Socket } from "socket.io";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
+import { WsRateLimiterService } from "../common/ws-rate-limiter.service";
 import { MatchmakingGateway } from "./matchmaking.gateway";
 import { MatchmakingService } from "./matchmaking.service";
 import { WsAuthService } from "./ws-auth.service";
@@ -30,6 +31,7 @@ describe("MatchmakingGateway", () => {
     handleDisconnect: ReturnType<typeof vi.fn>;
   };
   let wsAuthService: { authenticate: ReturnType<typeof vi.fn> };
+  let wsRateLimiter: { allow: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     matchmakingService = {
@@ -40,12 +42,16 @@ describe("MatchmakingGateway", () => {
       handleDisconnect: vi.fn().mockResolvedValue(undefined),
     };
     wsAuthService = { authenticate: vi.fn() };
+    // Default: sempre dentro do limite — testes de rate limiting específicos
+    // sobrescrevem com mockResolvedValueOnce(false) quando necessário.
+    wsRateLimiter = { allow: vi.fn().mockResolvedValue(true) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         MatchmakingGateway,
         { provide: MatchmakingService, useValue: matchmakingService },
         { provide: WsAuthService, useValue: wsAuthService },
+        { provide: WsRateLimiterService, useValue: wsRateLimiter },
       ],
     }).compile();
 
@@ -142,6 +148,18 @@ describe("MatchmakingGateway", () => {
       const socket = fakeSocket({ data: { userId: "user-real" } });
       await gateway.onQueueAccept(socket, { matchId: "match-1" });
       expect(matchmakingService.accept).toHaveBeenCalledWith("user-real", "match-1");
+    });
+  });
+
+  describe("rate limiting de eventos WS (Prompt 13 — @nestjs/throttler não cobre gateways)", () => {
+    it("queue:join não delega ao serviço quando o rate limiter estourou", async () => {
+      wsRateLimiter.allow.mockResolvedValueOnce(false);
+      const socket = fakeSocket({ data: { userId: "user-real" } });
+
+      await gateway.onQueueJoin(socket, { userId: "user-real" });
+
+      expect(wsRateLimiter.allow).toHaveBeenCalledWith("queue:join:user-real", expect.any(Number), expect.any(Number));
+      expect(matchmakingService.join).not.toHaveBeenCalled();
     });
   });
 });

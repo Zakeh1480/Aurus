@@ -14,6 +14,7 @@ const validUser = {
   email: "jogador@example.com",
   displayName: "jogador",
   avatarUrl: null,
+  role: "user",
   createdAt: "2026-08-04T00:00:00.000Z",
   updatedAt: "2026-08-04T00:00:00.000Z",
 };

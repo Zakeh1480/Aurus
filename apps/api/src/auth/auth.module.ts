@@ -1,7 +1,6 @@
 import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
-import { ThrottlerModule } from "@nestjs/throttler";
 
 import { AuthController } from "./auth.controller";
 import { getAccessTtlSeconds, getJwtSecret } from "./auth.constants";
@@ -21,7 +20,6 @@ import { JwtStrategy } from "./jwt.strategy";
         signOptions: { expiresIn: getAccessTtlSeconds() },
       }),
     }),
-    ThrottlerModule.forRoot([{ name: "default", ttl: 60_000, limit: 20 }]),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

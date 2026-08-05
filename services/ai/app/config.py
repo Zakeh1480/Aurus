@@ -3,6 +3,15 @@
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# .env vive na raiz do monorepo (convenção do Prompt 0, mesma de apps/api/src/main.ts)
+# — services/ai/app/config.py está 3 níveis abaixo dela. load_dotenv nunca
+# sobrescreve uma env var já setada (override=False, default), então não
+# quebra testes que setam AI_SERVICE_SHARED_SECRET manualmente antes do import.
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 
 @dataclass(frozen=True)

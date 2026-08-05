@@ -4,6 +4,7 @@ import { JwtService } from "@nestjs/jwt";
 import { Prisma } from "@prisma/client";
 import * as argon2 from "argon2";
 
+import { activeBanWhere } from "../moderation/ban.util";
 import { PrismaService } from "../prisma/prisma.service";
 import { getAccessTtlSeconds, getRefreshTtlSeconds } from "./auth.constants";
 import type { JwtPayload } from "./jwt-payload.type";
@@ -54,11 +55,16 @@ export class AuthService implements OnModuleInit {
 
   async login(input: LoginRequest): Promise<AuthSession> {
     const invalidCredentials = new UnauthorizedException("Credenciais inválidas.");
-    const user = await this.prisma.user.findUnique({ where: { email: input.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: input.email },
+      include: { bansReceived: { where: activeBanWhere(), take: 1 } },
+    });
 
-    if (!user || user.anonymizedAt) {
+    if (!user || user.anonymizedAt || user.bansReceived.length > 0) {
       // Roda um verify contra um hash dummy para manter timing constante,
-      // evitando vazar via latência se o e-mail existe ou não.
+      // evitando vazar via latência se o e-mail existe, está anonimizado ou
+      // banido — usuário banido recebe a mesma mensagem genérica que
+      // credenciais inválidas (Prompt 13, nunca revela "você está banido").
       await argon2.verify(await this.getDummyHash(), input.password).catch(() => false);
       throw invalidCredentials;
     }
@@ -110,8 +116,11 @@ export class AuthService implements OnModuleInit {
       throw invalid;
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
-    if (!user || user.anonymizedAt) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: stored.userId },
+      include: { bansReceived: { where: activeBanWhere(), take: 1 } },
+    });
+    if (!user || user.anonymizedAt || user.bansReceived.length > 0) {
       throw invalid;
     }
 
@@ -128,6 +137,11 @@ export class AuthService implements OnModuleInit {
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /** Usado pelo ModerationModule (Prompt 13) ao banir um usuário — derruba todas as sessões ativas dele. */
+  async forceLogout(userId: string): Promise<void> {
+    await this.revokeAllUserTokens(userId);
   }
 
   private async issueTokenPair(userId: string): Promise<{ tokens: AuthTokens; refreshToken: string }> {

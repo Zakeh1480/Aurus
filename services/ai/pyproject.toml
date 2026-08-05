@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.9",
     "opencv-python-headless>=4.10,<5",
     "numpy>=1.26",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]

@@ -73,12 +73,15 @@ describe("ConsentService", () => {
   });
 
   describe("status", () => {
-    it("reporta granted: false quando não há consentimento de câmera registrado", async () => {
+    it("reporta granted: false para todo ConsentType quando nada foi registrado (Prompt 13: inclui 'terms')", async () => {
       prisma.consent.findFirst.mockResolvedValue(null);
 
       const result = await consentService.status("user-1");
 
-      expect(result).toEqual([{ type: "camera", granted: false, termsVersion: null, grantedAt: null }]);
+      expect(result).toEqual([
+        { type: "camera", granted: false, termsVersion: null, grantedAt: null },
+        { type: "terms", granted: false, termsVersion: null, grantedAt: null },
+      ]);
     });
 
     it("reporta granted: true com os dados do último consentimento concedido", async () => {

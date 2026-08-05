@@ -8,6 +8,14 @@ Como não existe `package.json` aqui, este diretório fica fora do grafo de
 workspaces do pnpm/Turborepo — `pnpm build`/`lint`/`test` na raiz não o
 tocam. As dependências Python são gerenciadas via [uv](https://docs.astral.sh/uv/).
 
+Sem CORS e sem chamada direta do browser (server-to-server só — ver
+`CONTRACT.md`). Desde o Prompt 13, `/score`, `/score/aggregate` e `/verify`
+exigem o header `X-AI-Service-Secret` batendo com `AI_SERVICE_SHARED_SECRET`
+(defesa em profundidade, caso o serviço fique alcançável de onde não
+deveria) — `/health` continua aberto para probes de infra. `app/config.py`
+carrega automaticamente o `.env` da raiz do monorepo (mesma convenção de
+`apps/api/src/main.ts`), então basta ele estar configurado lá.
+
 ## Quickstart
 
 ```bash
@@ -21,7 +29,8 @@ Com o servidor no ar:
 
 ```bash
 curl localhost:8000/health
-curl -X POST localhost:8000/score -H "Content-Type: application/json" -d '{
+curl -X POST localhost:8000/score -H "Content-Type: application/json" \
+  -H "X-AI-Service-Secret: $AI_SERVICE_SHARED_SECRET" -d '{
   "posture": 0.8, "eyeContact": 0.7, "expression": 0.6,
   "presence": 0.9, "movement": 0.5,
   "sequence": 0, "capturedAt": "2026-01-01T00:00:00.000Z"

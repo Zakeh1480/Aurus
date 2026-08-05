@@ -20,6 +20,7 @@ function buildUser(overrides: Partial<PrismaUser> = {}): PrismaUser {
     displayName: "Player One",
     avatarUrl: null,
     anonymizedAt: null,
+    role: "user",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
@@ -208,6 +209,7 @@ describe("UsersService", () => {
       const result = await usersService.exportData("user-1");
 
       expect(result.user.email).toBe("player@example.com");
+      expect(result.user.role).toBe("user");
       expect(result.profile?.nickname).toBe("PlayerOne");
       expect(result.consents).toHaveLength(1);
       expect(result.consents[0]).toMatchObject({ type: "camera", termsVersion: "v1" });
@@ -231,6 +233,21 @@ describe("UsersService", () => {
       const result = await usersService.exportData("user-1");
 
       expect(result.profile).toBeNull();
+    });
+
+    it("inclui consentimentos de tipo 'terms' junto com os de 'camera', sem filtro por tipo (Prompt 13)", async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue(buildUser());
+      prisma.profile.findUnique.mockResolvedValue(buildProfile());
+      prisma.consent.findMany.mockResolvedValue([
+        buildConsent({ type: "camera" }),
+        buildConsent({ id: "consent-2", type: "terms", termsVersion: "2026-08-04" }),
+      ]);
+      prisma.matchParticipant.findMany.mockResolvedValue([]);
+
+      const result = await usersService.exportData("user-1");
+
+      expect(result.consents).toHaveLength(2);
+      expect(result.consents.map((consent) => consent.type)).toEqual(["camera", "terms"]);
     });
 
     it("consulta os dados filtrando estritamente pelo userId do titular", async () => {
@@ -286,6 +303,13 @@ describe("UsersService", () => {
       const firstCallEmail = prisma.user.update.mock.calls[0]![0].data.email;
       const secondCallEmail = prisma.user.update.mock.calls[1]![0].data.email;
       expect(firstCallEmail).toBe(secondCallEmail);
+    });
+
+    it("nunca toca em role ao anonimizar (Prompt 13) — um moderador banido continua ambos após a anonimização", async () => {
+      await usersService.remove("user-1");
+
+      const updateData = prisma.user.update.mock.calls[0]![0].data as Record<string, unknown>;
+      expect(updateData).not.toHaveProperty("role");
     });
   });
 });

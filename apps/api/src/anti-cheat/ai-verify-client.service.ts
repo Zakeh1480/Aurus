@@ -1,6 +1,7 @@
 import { type VerifyRequest, type VerifyResponse, VerifyResponseSchema } from "@aurafarming/shared";
 import { Injectable } from "@nestjs/common";
 
+import { getAiServiceSecret } from "../common/internal-service-secret";
 import { getAntiCheatConfig } from "./anti-cheat.constants";
 
 /**
@@ -18,7 +19,7 @@ export class AiVerifyClientService {
     try {
       const response = await fetch(`${aiServiceUrl}/verify`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-ai-service-secret": getAiServiceSecret() },
         body: JSON.stringify(request),
         signal: controller.signal,
       });
