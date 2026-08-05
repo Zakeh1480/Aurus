@@ -13,14 +13,18 @@ from app.verification import (
     FacePresenceResult,
     compute_blur_variance,
     compute_discrepancy,
-    compute_liveness_flags,
     decode_keyframe,
     derive_eye_contact_proxy,
     derive_presence_proxy,
     detect_face_presence,
     verify,
 )
-from tests.fixtures import encode_image_base64, make_flat_image, make_noisy_image, make_verify_request
+from tests.fixtures import (
+    encode_image_base64,
+    make_flat_image,
+    make_noisy_image,
+    make_verify_request,
+)
 
 SETTINGS = Settings()
 

@@ -15,7 +15,11 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.constants import ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH, ANTI_CHEAT_VERSION, AURA_SCORE_VERSION
+from app.constants import (
+    ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH,
+    ANTI_CHEAT_VERSION,
+    AURA_SCORE_VERSION,
+)
 
 
 def _validate_iso_datetime(value: str) -> str:

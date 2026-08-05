@@ -29,6 +29,41 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      # Dentro da rede do compose os serviços se falam pelo nome do serviço,
+      # não "localhost" — sobrescreve os valores de .env (pensados para
+      # `pnpm dev` no host) aqui.
+      DATABASE_URL: postgresql://aurafarming:aurafarming@postgres:5432/aurafarming
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://ai-service:8000
+      PORT: "3001"
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ai-service:
+    build:
+      context: ./services/ai
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      AI_SERVICE_PORT: "8000"
+    ports:
+      - "8000:8000"
+
 volumes:
   postgres-data:
   redis-data:

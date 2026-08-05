@@ -16,10 +16,21 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "httpx>=0.27",
+    "ruff>=0.16.1",
 ]
 
 [tool.uv]
 package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# F (pyflakes: bugs reais) + I (ordenação de imports). E501 fica de fora —
+# o código existente não segue 100 cols e reformatar tudo foge do escopo
+# deste prompt (DevOps), não é um bug.
+select = ["F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -2,7 +2,12 @@
 
 import math
 
-from app.constants import ANTI_CHEAT_VERSION, AURA_METRIC_KEYS, AURA_SCORE_VERSION, AURA_SCORE_WEIGHTS
+from app.constants import (
+    ANTI_CHEAT_VERSION,
+    AURA_METRIC_KEYS,
+    AURA_SCORE_VERSION,
+    AURA_SCORE_WEIGHTS,
+)
 from app.schemas import AuraFeatures, AuraScoreBreakdown
 
 
