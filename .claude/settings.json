@@ -1,0 +1,88 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm dev)",
+      "Bash(pnpm build)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm test)",
+      "Bash(pnpm format)",
+      "Bash(pnpm format:check)",
+      "Bash(pnpm --filter @aurafarming/web dev)",
+      "Bash(pnpm --filter @aurafarming/web build)",
+      "Bash(pnpm --filter @aurafarming/web lint)",
+      "Bash(pnpm --filter @aurafarming/web typecheck)",
+      "Bash(pnpm --filter @aurafarming/web test)",
+      "Bash(pnpm --filter @aurafarming/api dev)",
+      "Bash(pnpm --filter @aurafarming/api build)",
+      "Bash(pnpm --filter @aurafarming/api lint)",
+      "Bash(pnpm --filter @aurafarming/api typecheck)",
+      "Bash(pnpm --filter @aurafarming/api test)",
+      "Bash(pnpm --filter @aurafarming/shared build)",
+      "Bash(pnpm --filter @aurafarming/shared test)",
+      "Bash(pnpm --filter @aurafarming/shared typecheck)",
+      "Bash(turbo run dev*)",
+      "Bash(turbo run build*)",
+      "Bash(turbo run lint*)",
+      "Bash(turbo run typecheck*)",
+      "Bash(turbo run test*)",
+      "Bash(pnpm turbo run build*)",
+      "Bash(pnpm turbo run lint*)",
+      "Bash(pnpm turbo run typecheck*)",
+      "Bash(pnpm turbo run test*)",
+      "Bash(pnpm --filter @aurafarming/api exec prisma generate*)",
+      "Bash(pnpm --filter @aurafarming/api exec prisma migrate dev*)",
+      "Bash(pnpm --filter @aurafarming/api exec prisma migrate status*)",
+      "Bash(pnpm --filter @aurafarming/api exec prisma studio*)",
+      "Bash(pnpm --filter @aurafarming/api exec prisma validate*)",
+      "Bash(pnpm --filter api prisma migrate dev*)",
+      "Bash(pnpm --filter api prisma generate*)",
+      "Bash(docker compose up*)",
+      "Bash(docker compose down)",
+      "Bash(docker compose ps*)",
+      "Bash(docker compose logs*)",
+      "Bash(docker compose build*)",
+      "Bash(docker compose restart*)",
+      "Bash(docker compose exec postgres*)",
+      "Bash(docker compose exec redis*)",
+      "Bash(curl http://localhost:3001/health)",
+      "Bash(curl http://localhost:8000/health)",
+      "Bash(uv sync*)",
+      "Bash(uv run pytest*)",
+      "Bash(uv run ruff check*)",
+      "Bash(cd services/ai && uv sync*)",
+      "Bash(cd services/ai && uv run pytest*)",
+      "Bash(cd services/ai && uv run ruff check*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git show*)",
+      "Bash(git stash list*)",
+      "Bash(git remote -v)",
+      "Bash(git fetch*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh repo view*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('file_path','') or '')\" | { read -r f; case \"$f\" in *.ts|*.tsx|*.js|*.jsx|*.json|*.md|*.css) (cd /home/isaque/Documentos/projetos/aurus && pnpm exec prettier --write \"$f\") ;; esac; } 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Formatando com Prettier..."
+          }
+        ]
+      }
+    ]
+  }
+}
