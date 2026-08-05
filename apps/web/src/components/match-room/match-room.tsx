@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 
+import { ReportDialog } from "@/components/moderation/report-dialog";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,15 @@ export function MatchRoom({ matchId }: MatchRoomProps) {
         <>
           <ScoreHud scores={state.scores} ownMetrics={ownMetrics} liveSince={liveSince} />
           {state.pendingChallenge && <VerifyChallengeIndicator />}
+          {state.scores && (
+            <ReportDialog
+              reportedUserId={state.scores.opponentId}
+              matchId={matchId}
+              defaultReason="inappropriate_camera_content"
+              triggerLabel="Sinalizar conteúdo impróprio"
+              triggerVariant="ghost"
+            />
+          )}
         </>
       )}
 

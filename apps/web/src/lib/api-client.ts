@@ -3,13 +3,20 @@ import {
   AuthResponseSchema,
   ConsentSchema,
   ConsentStatusSchema,
+  type CreateReportRequest,
   type GrantConsentRequest,
   type LoginRequest,
+  MatchScoreExplanationSchema,
+  type ModerationActionRequest,
   ProfileSchema,
   type RankingListQuery,
   RankingListResponseSchema,
   RankingMeResponseSchema,
   type RegisterRequest,
+  ReportDetailSchema,
+  ReportListResponseSchema,
+  type ReportListQuery,
+  ReportSchema,
   UserDataExportSchema,
   UserSchema,
   type UpdateProfileRequest,
@@ -140,10 +147,27 @@ export const matchesApi = {
     request(`/matches/${matchId}/token`, LivekitTokenResponseSchema, { method: "POST" }),
   getAntiCheatSecret: (matchId: string) =>
     request(`/matches/${matchId}/anti-cheat-secret`, AntiCheatSessionSecretResponseSchema, { method: "POST" }),
+  getScoreExplanation: (matchId: string) =>
+    request(`/matches/${matchId}/score-explanation`, MatchScoreExplanationSchema),
 };
 
 export const rankingApi = {
   list: (query: RankingListQuery) =>
     request(`/ranking?${toQueryString(query)}`, RankingListResponseSchema),
   me: () => request("/ranking/me", RankingMeResponseSchema),
+};
+
+export const reportsApi = {
+  create: (body: CreateReportRequest) => request("/reports", ReportSchema, { method: "POST", body }),
+};
+
+export const moderationApi = {
+  listReports: (query: ReportListQuery) =>
+    request(
+      `/moderation/reports?${toQueryString({ status: query.status, limit: query.limit, offset: query.offset })}`,
+      ReportListResponseSchema,
+    ),
+  getReport: (id: string) => request(`/moderation/reports/${id}`, ReportDetailSchema),
+  resolveReport: (id: string, body: ModerationActionRequest) =>
+    request(`/moderation/reports/${id}/action`, ReportSchema, { method: "POST", body }),
 };

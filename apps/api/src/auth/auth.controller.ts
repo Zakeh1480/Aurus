@@ -8,7 +8,7 @@ import {
   type User,
 } from "@aurafarming/shared";
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards, UsePipes } from "@nestjs/common";
-import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
@@ -18,8 +18,9 @@ import { clearRefreshCookie, setRefreshCookie } from "./cookie.util";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 
+// ThrottlerGuard é global (APP_GUARD em app.module.ts) — os @Throttle abaixo
+// só apertam o limite default (20/60s) para estas rotas específicas.
 @Controller("auth")
-@UseGuards(ThrottlerGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 

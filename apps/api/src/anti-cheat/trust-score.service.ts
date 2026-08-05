@@ -197,7 +197,7 @@ export class TrustScoreService {
   private async persistIncidentIfNeeded(assessment: TrustAssessment): Promise<void> {
     if (assessment.decision === "valid") return;
 
-    await this.prisma.antiCheatIncident.upsert({
+    const incident = await this.prisma.antiCheatIncident.upsert({
       where: { matchId_userId: { matchId: assessment.matchId, userId: assessment.userId } },
       create: {
         matchId: assessment.matchId,
@@ -225,6 +225,23 @@ export class TrustScoreService {
         detail: { livenessFlagCounts: assessment.livenessFlagCounts },
         version: ANTI_CHEAT_VERSION,
       },
+    });
+
+    // Auto-gera uma entrada revisável na fila de moderação (Prompt 13) — sem
+    // ação automática, só entra na fila para um moderador humano decidir.
+    // Upsert por antiCheatIncidentId: idempotente, nunca duplica nem reseta
+    // um caso já revisado quando o mesmo incidente é reavaliado.
+    await this.prisma.report.upsert({
+      where: { antiCheatIncidentId: incident.id },
+      create: {
+        reportedId: assessment.userId,
+        matchId: assessment.matchId,
+        antiCheatIncidentId: incident.id,
+        source: "anti_cheat",
+        reason: "cheating",
+        details: `Gerado automaticamente pelo pipeline de anti-cheat (decisão: ${assessment.decision}).`,
+      },
+      update: {},
     });
   }
 

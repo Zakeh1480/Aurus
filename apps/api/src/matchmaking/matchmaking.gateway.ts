@@ -18,8 +18,15 @@ import {
 import type { Server, Socket } from "socket.io";
 
 import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
+import { WsRateLimiterService } from "../common/ws-rate-limiter.service";
 import { MatchmakingService } from "./matchmaking.service";
 import { WsAuthService } from "./ws-auth.service";
+
+/** Janela fixa de 60s — @nestjs/throttler não cobre gateways WS (Prompt 13). */
+const QUEUE_JOIN_LIMIT = 10;
+const QUEUE_LEAVE_LIMIT = 10;
+const QUEUE_ACCEPT_LIMIT = 10;
+const QUEUE_RATE_WINDOW_MS = 60_000;
 
 @WebSocketGateway()
 export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
@@ -28,6 +35,7 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
   constructor(
     private readonly matchmakingService: MatchmakingService,
     private readonly wsAuthService: WsAuthService,
+    private readonly wsRateLimiter: WsRateLimiterService,
   ) {}
 
   /**
@@ -68,7 +76,9 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(QueueJoinPayloadSchema)) payload: QueueJoinPayload,
   ): Promise<void> {
-    await this.matchmakingService.join(this.requireUserId(socket, payload.userId));
+    const userId = this.requireUserId(socket, payload.userId);
+    if (!(await this.wsRateLimiter.allow(`queue:join:${userId}`, QUEUE_JOIN_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
+    await this.matchmakingService.join(userId);
   }
 
   @SubscribeMessage("queue:leave")
@@ -76,7 +86,9 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(QueueLeavePayloadSchema)) payload: QueueLeavePayload,
   ): Promise<void> {
-    await this.matchmakingService.leave(this.requireUserId(socket, payload.userId));
+    const userId = this.requireUserId(socket, payload.userId);
+    if (!(await this.wsRateLimiter.allow(`queue:leave:${userId}`, QUEUE_LEAVE_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
+    await this.matchmakingService.leave(userId);
   }
 
   @SubscribeMessage("queue:accept")
@@ -85,6 +97,7 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
     @MessageBody(new ZodValidationPipe(QueueAcceptPayloadSchema)) payload: QueueAcceptPayload,
   ): Promise<void> {
     const userId = socket.data.userId as string;
+    if (!(await this.wsRateLimiter.allow(`queue:accept:${userId}`, QUEUE_ACCEPT_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
     await this.matchmakingService.accept(userId, payload.matchId);
   }
 

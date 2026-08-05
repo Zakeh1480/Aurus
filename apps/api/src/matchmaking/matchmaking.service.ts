@@ -262,4 +262,14 @@ export class MatchmakingService {
   emitToUser<E extends WsEventName>(userId: string, event: E, payload: WsEventPayload<E>): void {
     this.emitTo(userId, event, payload);
   }
+
+  /**
+   * Chamado pelo ModerationModule (Prompt 13) logo após um ban ser aplicado —
+   * desconexão nativa do Socket.IO (não é um WsEventSchemas validado); a
+   * próxima chamada REST/refresh do usuário já rejeita via activeBanWhere().
+   * No-op se o usuário não tem socket vivo registrado.
+   */
+  disconnectUser(userId: string): void {
+    this.sockets.get(userId)?.disconnect(true);
+  }
 }

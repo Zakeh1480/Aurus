@@ -13,7 +13,8 @@ export type MatchRoomErrorKind =
   | "connection-failed"
   | "timeout";
 
-export type LiveScores = { self: number; opponent: number };
+/** opponentId (Prompt 13): usado para pré-preencher a denúncia/sinalização durante a partida. */
+export type LiveScores = { self: number; opponent: number; opponentId: string };
 
 export type PendingChallenge = { challengeId: string; expiresAt: string };
 
@@ -41,7 +42,7 @@ function toLiveScores(payload: MatchScoreTickPayload, selfUserId: string): LiveS
   const self = payload.scores.find((entry) => entry.userId === selfUserId);
   const opponent = payload.scores.find((entry) => entry.userId !== selfUserId);
   if (!self || !opponent) return null;
-  return { self: self.liveScore, opponent: opponent.liveScore };
+  return { self: self.liveScore, opponent: opponent.liveScore, opponentId: opponent.userId };
 }
 
 /**

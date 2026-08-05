@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -31,7 +32,7 @@ function downloadJson(filename: string, data: unknown): void {
 }
 
 export function SettingsView() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
@@ -94,8 +95,25 @@ export function SettingsView() {
           ) : (
             <p className="text-sm text-muted-foreground">Nenhum consentimento registrado ainda.</p>
           )}
+          <Link href="/termos" className="text-sm text-primary underline-offset-4 hover:underline">
+            Ver Termos de Uso e Política de Privacidade
+          </Link>
         </CardContent>
       </Card>
+
+      {user?.role === "moderator" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Moderação</CardTitle>
+            <CardDescription>Revisar denúncias e incidentes de anti-cheat.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline">
+              <Link href="/moderacao">Abrir fila de moderação</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="border-destructive/40">
         <CardHeader>

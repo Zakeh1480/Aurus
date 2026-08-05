@@ -11,6 +11,7 @@ export function toPublicUser(user: PrismaUser): User {
     email: user.email,
     displayName: user.displayName,
     avatarUrl: user.avatarUrl,
+    role: user.role,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };

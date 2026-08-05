@@ -1,6 +1,7 @@
 import { type AuraFeatures, type AuraScore, AuraScoreSchema } from "@aurafarming/shared";
 import { Injectable } from "@nestjs/common";
 
+import { getAiServiceSecret } from "../common/internal-service-secret";
 import { getScoringConfig } from "./scoring.constants";
 
 /**
@@ -26,7 +27,7 @@ export class AiScoreClientService {
     try {
       const response = await fetch(`${aiServiceUrl}${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-ai-service-secret": getAiServiceSecret() },
         body: JSON.stringify(body),
         signal: controller.signal,
       });

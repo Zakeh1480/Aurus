@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { AURA_METRIC_KEYS, type AuraScore, type MatchResultPayload } from "@aurafarming/shared";
+import { AURA_METRIC_KEYS, AURA_SCORE_WEIGHTS, type AuraScore, type MatchResultPayload } from "@aurafarming/shared";
 
+import { ReportDialog } from "@/components/moderation/report-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,10 @@ function PlayerBreakdown({ label, score, ratingDelta }: { label: string; score: 
           <div key={key} className="flex items-center gap-2">
             <span className="w-24 shrink-0 text-xs text-muted-foreground">{AURA_METRIC_LABELS[key]}</span>
             <Progress value={score.breakdown[key]} />
+            {/* Peso fixo da métrica (fairness, Prompt 13) — contribuição = valor bruto × peso. */}
+            <span className="w-10 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+              ×{AURA_SCORE_WEIGHTS[key].toFixed(2)}
+            </span>
           </div>
         ))}
       </div>
@@ -66,6 +71,12 @@ export function ResultScreen({ result, selfUserId }: ResultScreenProps) {
         <Button asChild variant="outline" className="w-full">
           <Link href="/ranking">Ver ranking</Link>
         </Button>
+        <ReportDialog
+          reportedUserId={opponent.userId}
+          matchId={result.matchId}
+          triggerLabel="Reportar jogador"
+          triggerVariant="ghost"
+        />
       </CardFooter>
     </Card>
   );

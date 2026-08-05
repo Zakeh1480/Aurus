@@ -1,4 +1,4 @@
-import type { AuraFeatures, AuraScore, MatchTrustDecision } from "@aurafarming/shared";
+import { AURA_SCORE_VERSION, type AuraFeatures, type AuraScore, type MatchTrustDecision } from "@aurafarming/shared";
 import { Test } from "@nestjs/testing";
 import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -193,7 +193,12 @@ describe("ScoringService.finalizeMatch", () => {
     });
     expect(tx.match.update).toHaveBeenCalledWith({
       where: { id: MATCH_ID },
-      data: expect.objectContaining({ status: "completed", winnerId: PLAYER_1 }) as unknown,
+      // Fairness (Prompt 13): scoreVersion sempre carimbado em todo Match finalizado.
+      data: expect.objectContaining({
+        status: "completed",
+        winnerId: PLAYER_1,
+        scoreVersion: AURA_SCORE_VERSION,
+      }) as unknown,
     });
 
     expect(rankingService.recordMatchResult).toHaveBeenCalledWith([

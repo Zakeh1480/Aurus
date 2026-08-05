@@ -1,7 +1,12 @@
 import { ConflictException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
-import { Prisma, type User as PrismaUser, type RefreshToken as PrismaRefreshToken } from "@prisma/client";
+import {
+  Prisma,
+  type Ban as PrismaBan,
+  type User as PrismaUser,
+  type RefreshToken as PrismaRefreshToken,
+} from "@prisma/client";
 import * as argon2 from "argon2";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,8 +22,31 @@ function buildUser(overrides: Partial<PrismaUser> = {}): PrismaUser {
     displayName: "Player One",
     avatarUrl: null,
     anonymizedAt: null,
+    role: "user",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+/** login/refresh usam `include: { bansReceived: {...} }` (Prompt 13) — o shape resolvido pelo mock precisa refletir isso. */
+function buildUserWithBans(
+  overrides: Partial<PrismaUser> = {},
+  bansReceived: PrismaBan[] = [],
+): PrismaUser & { bansReceived: PrismaBan[] } {
+  return { ...buildUser(overrides), bansReceived };
+}
+
+function buildBan(overrides: Partial<PrismaBan> = {}): PrismaBan {
+  return {
+    id: "ban-1",
+    userId: "user-1",
+    issuedById: "moderator-1",
+    reason: "Denúncia confirmada.",
+    expiresAt: null,
+    liftedAt: null,
+    liftedById: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -106,7 +134,7 @@ describe("AuthService", () => {
   describe("login", () => {
     it("retorna user, tokens e refreshToken quando as credenciais são válidas", async () => {
       const passwordHash = await argon2.hash("senha-correta", { type: argon2.argon2id });
-      prisma.user.findUnique.mockResolvedValue(buildUser({ passwordHash }));
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ passwordHash }));
       prisma.refreshToken.create.mockResolvedValue(buildRefreshToken());
 
       const result = await authService.login({ email: "player@example.com", password: "senha-correta" });
@@ -132,7 +160,7 @@ describe("AuthService", () => {
 
     it("rejeita com a mesma mensagem quando a senha está errada", async () => {
       const passwordHash = await argon2.hash("senha-correta", { type: argon2.argon2id });
-      prisma.user.findUnique.mockResolvedValue(buildUser({ passwordHash }));
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ passwordHash }));
 
       await expect(
         authService.login({ email: "player@example.com", password: "senha-errada" }),
@@ -141,11 +169,33 @@ describe("AuthService", () => {
 
     it("rejeita login de usuário anonimizado mesmo com senha correta", async () => {
       const passwordHash = await argon2.hash("senha-correta", { type: argon2.argon2id });
-      prisma.user.findUnique.mockResolvedValue(buildUser({ passwordHash, anonymizedAt: new Date() }));
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ passwordHash, anonymizedAt: new Date() }));
 
       await expect(
         authService.login({ email: "player@example.com", password: "senha-correta" }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it("rejeita login de usuário com ban ativo (mesma mensagem genérica)", async () => {
+      const passwordHash = await argon2.hash("senha-correta", { type: argon2.argon2id });
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ passwordHash }, [buildBan()]));
+
+      await expect(
+        authService.login({ email: "player@example.com", password: "senha-correta" }),
+      ).rejects.toMatchObject({ message: "Credenciais inválidas." });
+    });
+
+    it("consulta findUnique já filtrando por ban ativo (activeBanWhere)", async () => {
+      const passwordHash = await argon2.hash("senha-correta", { type: argon2.argon2id });
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ passwordHash }));
+      prisma.refreshToken.create.mockResolvedValue(buildRefreshToken());
+
+      await authService.login({ email: "player@example.com", password: "senha-correta" });
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { email: "player@example.com" },
+        include: { bansReceived: { where: expect.any(Object), take: 1 } },
+      });
     });
   });
 
@@ -155,7 +205,7 @@ describe("AuthService", () => {
       const stored = buildRefreshToken({ tokenHash: hashToken(rawToken) });
       prisma.refreshToken.findUnique.mockResolvedValue(stored);
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
-      prisma.user.findUnique.mockResolvedValue(buildUser());
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans());
       prisma.refreshToken.create.mockResolvedValue(buildRefreshToken({ id: "token-2" }));
 
       const result = await authService.refresh(rawToken);
@@ -232,10 +282,34 @@ describe("AuthService", () => {
       const stored = buildRefreshToken({ tokenHash: hashToken(rawToken) });
       prisma.refreshToken.findUnique.mockResolvedValue(stored);
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
-      prisma.user.findUnique.mockResolvedValue(buildUser({ anonymizedAt: new Date() }));
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ anonymizedAt: new Date() }));
 
       await expect(authService.refresh(rawToken)).rejects.toBeInstanceOf(UnauthorizedException);
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+    it("rejeita quando o usuário foi banido após o claim", async () => {
+      const rawToken = "raw-refresh-token";
+      const stored = buildRefreshToken({ tokenHash: hashToken(rawToken) });
+      prisma.refreshToken.findUnique.mockResolvedValue(stored);
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans({}, [buildBan()]));
+
+      await expect(authService.refresh(rawToken)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("forceLogout", () => {
+    it("revoga todos os refresh tokens ativos do usuário (usado pelo ModerationModule ao banir)", async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 2 });
+
+      await authService.forceLogout("user-1");
+
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: "user-1", revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
     });
   });
 

@@ -1,7 +1,7 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
-import type { User as PrismaUser } from "@prisma/client";
+import type { Ban as PrismaBan, User as PrismaUser } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PrismaService } from "../prisma/prisma.service";
@@ -15,8 +15,31 @@ function buildUser(overrides: Partial<PrismaUser> = {}): PrismaUser {
     displayName: "Player One",
     avatarUrl: null,
     anonymizedAt: null,
+    role: "user",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+/** authenticate() usa `include: { bansReceived: {...} }` (Prompt 13) — o mock precisa devolver esse shape. */
+function buildUserWithBans(
+  overrides: Partial<PrismaUser> = {},
+  bansReceived: PrismaBan[] = [],
+): PrismaUser & { bansReceived: PrismaBan[] } {
+  return { ...buildUser(overrides), bansReceived };
+}
+
+function buildBan(overrides: Partial<PrismaBan> = {}): PrismaBan {
+  return {
+    id: "ban-1",
+    userId: "user-1",
+    issuedById: "moderator-1",
+    reason: "Denúncia confirmada.",
+    expiresAt: null,
+    liftedAt: null,
+    liftedById: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -42,10 +65,13 @@ describe("WsAuthService", () => {
 
   it("resolve o userId para um token válido de usuário ativo", async () => {
     const token = jwtService.sign({ sub: "user-1" });
-    prisma.user.findUnique.mockResolvedValue(buildUser());
+    prisma.user.findUnique.mockResolvedValue(buildUserWithBans());
 
     await expect(wsAuthService.authenticate(token)).resolves.toBe("user-1");
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: "user-1" } });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      include: { bansReceived: { where: expect.any(Object), take: 1 } },
+    });
   });
 
   it("lança quando o token está ausente", async () => {
@@ -70,7 +96,14 @@ describe("WsAuthService", () => {
 
   it("lança quando a conta foi anonimizada (LGPD), mesmo com token válido", async () => {
     const token = jwtService.sign({ sub: "user-1" });
-    prisma.user.findUnique.mockResolvedValue(buildUser({ anonymizedAt: new Date() }));
+    prisma.user.findUnique.mockResolvedValue(buildUserWithBans({ anonymizedAt: new Date() }));
+
+    await expect(wsAuthService.authenticate(token)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("lança quando a conta tem um ban ativo (Prompt 13), mesmo com token válido", async () => {
+    const token = jwtService.sign({ sub: "user-1" });
+    prisma.user.findUnique.mockResolvedValue(buildUserWithBans({}, [buildBan()]));
 
     await expect(wsAuthService.authenticate(token)).rejects.toBeInstanceOf(UnauthorizedException);
   });

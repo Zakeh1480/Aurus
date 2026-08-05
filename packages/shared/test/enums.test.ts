@@ -4,16 +4,71 @@ import { AntiCheatDecisionSchema } from "../src/enums/anti-cheat-decision.enum.j
 import { ConsentTypeSchema } from "../src/enums/consent-type.enum.js";
 import { MatchSideSchema } from "../src/enums/match-side.enum.js";
 import { MatchStatusSchema } from "../src/enums/match-status.enum.js";
+import { ModerationActionTypeSchema } from "../src/enums/moderation-action-type.enum.js";
 import { QueueStatusSchema } from "../src/enums/queue-status.enum.js";
+import { ReportReasonSchema } from "../src/enums/report-reason.enum.js";
+import { ReportSourceSchema } from "../src/enums/report-source.enum.js";
+import { ReportStatusSchema } from "../src/enums/report-status.enum.js";
+import { RoleSchema } from "../src/enums/role.enum.js";
 import { TrustLevelSchema } from "../src/enums/trust-level.enum.js";
 
 describe("ConsentTypeSchema", () => {
-  it.each(["camera"])("aceita %s", (value) => {
+  it.each(["camera", "terms"])("aceita %s", (value) => {
     expect(ConsentTypeSchema.safeParse(value).success).toBe(true);
   });
 
   it("rejeita um valor fora do enum", () => {
     expect(ConsentTypeSchema.safeParse("microphone").success).toBe(false);
+  });
+});
+
+describe("RoleSchema", () => {
+  it.each(["user", "moderator"])("aceita %s", (value) => {
+    expect(RoleSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejeita um valor fora do enum", () => {
+    expect(RoleSchema.safeParse("admin").success).toBe(false);
+  });
+});
+
+describe("ReportReasonSchema", () => {
+  it.each(["cheating", "harassment", "inappropriate_camera_content", "other"])("aceita %s", (value) => {
+    expect(ReportReasonSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejeita um valor fora do enum", () => {
+    expect(ReportReasonSchema.safeParse("spam").success).toBe(false);
+  });
+});
+
+describe("ReportStatusSchema", () => {
+  it.each(["open", "resolved"])("aceita %s", (value) => {
+    expect(ReportStatusSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejeita um valor fora do enum", () => {
+    expect(ReportStatusSchema.safeParse("closed").success).toBe(false);
+  });
+});
+
+describe("ModerationActionTypeSchema", () => {
+  it.each(["dismissed", "warned", "banned"])("aceita %s", (value) => {
+    expect(ModerationActionTypeSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejeita um valor fora do enum", () => {
+    expect(ModerationActionTypeSchema.safeParse("muted").success).toBe(false);
+  });
+});
+
+describe("ReportSourceSchema", () => {
+  it.each(["manual", "anti_cheat"])("aceita %s", (value) => {
+    expect(ReportSourceSchema.safeParse(value).success).toBe(true);
+  });
+
+  it("rejeita um valor fora do enum", () => {
+    expect(ReportSourceSchema.safeParse("system").success).toBe(false);
   });
 });
 

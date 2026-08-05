@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.schemas import AuraFeatures, AuraScore, ScoreAggregateRequest
 from app.scoring import aggregate_scores, compute_score
+from app.security import verify_service_secret
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_service_secret)])
 
 
 @router.post("/score", response_model=AuraScore)

@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 
 import type { JwtPayload } from "../auth/jwt-payload.type";
+import { activeBanWhere } from "../moderation/ban.util";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -25,10 +26,13 @@ export class WsAuthService {
     }
 
     // Mesma releitura do Postgres que JwtStrategy.validate faz para REST —
-    // não confia só no payload, para invalidar contas anonimizadas (LGPD)
-    // na hora, mesmo com access token ainda válido.
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user || user.anonymizedAt) {
+    // não confia só no payload, para invalidar contas anonimizadas (LGPD) ou
+    // banidas (Prompt 13) na hora, mesmo com access token ainda válido.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { bansReceived: { where: activeBanWhere(), take: 1 } },
+    });
+    if (!user || user.anonymizedAt || user.bansReceived.length > 0) {
       throw new UnauthorizedException();
     }
 

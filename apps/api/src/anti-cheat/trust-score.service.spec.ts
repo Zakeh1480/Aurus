@@ -36,7 +36,11 @@ describe("TrustScoreService", () => {
     expire: ReturnType<typeof vi.fn>;
     hgetall: ReturnType<typeof vi.fn>;
   };
-  let prisma: { match: { findUniqueOrThrow: ReturnType<typeof vi.fn> }; antiCheatIncident: { upsert: ReturnType<typeof vi.fn> } };
+  let prisma: {
+    match: { findUniqueOrThrow: ReturnType<typeof vi.fn> };
+    antiCheatIncident: { upsert: ReturnType<typeof vi.fn> };
+    report: { upsert: ReturnType<typeof vi.fn> };
+  };
   let service: TrustScoreService;
   let store: Record<string, Record<string, string>>;
 
@@ -56,7 +60,10 @@ describe("TrustScoreService", () => {
     };
     prisma = {
       match: { findUniqueOrThrow: vi.fn() },
-      antiCheatIncident: { upsert: vi.fn() },
+      // id retornado é consumido por persistIncidentIfNeeded para o upsert
+      // idempotente do Report auto-gerado (antiCheatIncidentId, Prompt 13).
+      antiCheatIncident: { upsert: vi.fn().mockResolvedValue({ id: "incident-1" }) },
+      report: { upsert: vi.fn() },
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -152,15 +159,31 @@ describe("TrustScoreService", () => {
           where: { matchId_userId: { matchId: MATCH_ID, userId: USER_B } },
         }),
       );
+
+      // Prompt 13: incidente não-"valid" auto-gera uma entrada na fila de
+      // moderação, chaveada pelo id do incidente (upsert idempotente).
+      expect(prisma.report.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.report.upsert).toHaveBeenCalledWith({
+        where: { antiCheatIncidentId: "incident-1" },
+        create: expect.objectContaining({
+          reportedId: USER_B,
+          matchId: MATCH_ID,
+          antiCheatIncidentId: "incident-1",
+          source: "anti_cheat",
+          reason: "cheating",
+        }),
+        update: {},
+      });
     });
 
-    it("quando ambos são válidos, nenhum incidente é persistido", async () => {
+    it("quando ambos são válidos, nenhum incidente nem report são persistidos", async () => {
       prisma.match.findUniqueOrThrow.mockResolvedValue({ id: MATCH_ID, player1Id: USER_A, player2Id: USER_B });
 
       const result = await service.getMatchDecision(MATCH_ID);
 
       expect(result.overallDecision).toBe("valid");
       expect(prisma.antiCheatIncident.upsert).not.toHaveBeenCalled();
+      expect(prisma.report.upsert).not.toHaveBeenCalled();
     });
   });
 });

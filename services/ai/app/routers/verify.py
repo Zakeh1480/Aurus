@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas import VerifyRequest, VerifyResponse
+from app.security import verify_service_secret
 from app.verification import verify
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_service_secret)])
 
 
 @router.post("/verify", response_model=VerifyResponse)

@@ -16,13 +16,23 @@ import {
   RegisterRequestSchema,
 } from "../src/dtos/auth.dto.js";
 import { ConsentSchema, ConsentStatusSchema, GrantConsentRequestSchema } from "../src/dtos/consent.dto.js";
+import { BanSchema } from "../src/dtos/ban.dto.js";
 import { LivekitTokenResponseSchema } from "../src/dtos/livekit-token.dto.js";
 import { MatchResultSchema } from "../src/dtos/match-result.dto.js";
 import { MatchSchema } from "../src/dtos/match.dto.js";
+import { ModerationActionRequestSchema } from "../src/dtos/moderation-action.dto.js";
 import { ProfileSchema, UpdateProfileRequestSchema } from "../src/dtos/profile.dto.js";
 import { RankingEntrySchema } from "../src/dtos/ranking-entry.dto.js";
 import { RankingListQuerySchema, RankingListResponseSchema } from "../src/dtos/ranking-list.dto.js";
 import { RankingMeResponseSchema } from "../src/dtos/ranking-me.dto.js";
+import {
+  CreateReportRequestSchema,
+  ReportDetailSchema,
+  ReportListQuerySchema,
+  ReportListResponseSchema,
+  ReportSchema,
+} from "../src/dtos/report.dto.js";
+import { MatchScoreExplanationSchema } from "../src/dtos/score-explanation.dto.js";
 import { MatchHistoryEntrySchema, UserDataExportSchema } from "../src/dtos/user-data-export.dto.js";
 import { UserSchema } from "../src/dtos/user.dto.js";
 import { LivenessFlagsSchema, VerifyRequestSchema, VerifyResponseSchema } from "../src/dtos/verify.dto.js";
@@ -38,6 +48,7 @@ describe("UserSchema", () => {
       email: "player@example.com",
       displayName: "Player One",
       avatarUrl: null,
+      role: "user",
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -50,6 +61,20 @@ describe("UserSchema", () => {
       email: "not-an-email",
       displayName: "Player One",
       avatarUrl: null,
+      role: "user",
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita role fora do enum", () => {
+    const result = UserSchema.safeParse({
+      id: UUID_A,
+      email: "player@example.com",
+      displayName: "Player One",
+      avatarUrl: null,
+      role: "admin",
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -153,6 +178,7 @@ describe("AuthResponseSchema", () => {
     email: "player@example.com",
     displayName: "Player One",
     avatarUrl: null,
+    role: "user" as const,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -632,6 +658,7 @@ describe("UserDataExportSchema", () => {
     email: "player@example.com",
     displayName: "Player One",
     avatarUrl: null,
+    role: "user" as const,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -927,5 +954,219 @@ describe("AntiCheatIncidentSchema", () => {
       createdAt: NOW,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+const VALID_REPORT = {
+  id: UUID_A,
+  reporterId: UUID_B,
+  reportedId: UUID_A,
+  matchId: UUID_A,
+  source: "manual" as const,
+  reason: "cheating" as const,
+  details: null,
+  status: "open" as const,
+  action: null,
+  resolutionNote: null,
+  resolvedById: null,
+  resolvedAt: null,
+  banId: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+
+describe("ReportSchema", () => {
+  it("aceita uma denúncia manual válida", () => {
+    expect(ReportSchema.safeParse(VALID_REPORT).success).toBe(true);
+  });
+
+  it("aceita um report auto-gerado pelo anti-cheat (reporterId nulo)", () => {
+    const result = ReportSchema.safeParse({ ...VALID_REPORT, reporterId: null, source: "anti_cheat" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita reason fora do enum", () => {
+    const result = ReportSchema.safeParse({ ...VALID_REPORT, reason: "spam" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("CreateReportRequestSchema", () => {
+  it("aceita uma denúncia sem matchId/details (opcionais)", () => {
+    const result = CreateReportRequestSchema.safeParse({ reportedUserId: UUID_A, reason: "harassment" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita reportedUserId inválido", () => {
+    const result = CreateReportRequestSchema.safeParse({ reportedUserId: "not-a-uuid", reason: "harassment" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita details acima de 500 caracteres", () => {
+    const result = CreateReportRequestSchema.safeParse({
+      reportedUserId: UUID_A,
+      reason: "other",
+      details: "x".repeat(501),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ReportListQuerySchema", () => {
+  it("aplica defaults de paginação quando ausentes", () => {
+    const result = ReportListQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ limit: 20, offset: 0 });
+    }
+  });
+
+  it("aceita filtro de status", () => {
+    expect(ReportListQuerySchema.safeParse({ status: "resolved" }).success).toBe(true);
+  });
+});
+
+describe("ReportListResponseSchema", () => {
+  it("aceita um envelope de paginação válido", () => {
+    const result = ReportListResponseSchema.safeParse({
+      entries: [VALID_REPORT],
+      limit: 20,
+      offset: 0,
+      total: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("ReportDetailSchema", () => {
+  it("aceita um detalhe sem incidentes relacionados", () => {
+    const result = ReportDetailSchema.safeParse({ ...VALID_REPORT, relatedAntiCheatIncidents: [] });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita um detalhe com incidentes de anti-cheat relacionados", () => {
+    const result = ReportDetailSchema.safeParse({
+      ...VALID_REPORT,
+      relatedAntiCheatIncidents: [
+        {
+          id: UUID_B,
+          matchId: UUID_A,
+          userId: VALID_REPORT.reportedId,
+          decision: "flagged",
+          trustLevel: "medium",
+          trustScore: 0.5,
+          discrepancyAvg: null,
+          rejectedPacketRatio: 0.1,
+          temporalViolationCount: 0,
+          challengesIssued: 2,
+          challengesAnswered: 2,
+          detail: {},
+          version: "anti-cheat-v1",
+          createdAt: NOW,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("BanSchema", () => {
+  it("aceita um ban permanente (expiresAt nulo)", () => {
+    const result = BanSchema.safeParse({
+      id: UUID_A,
+      userId: UUID_A,
+      issuedById: UUID_B,
+      reason: "Denúncia confirmada.",
+      expiresAt: null,
+      liftedAt: null,
+      liftedById: null,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita um ban levantado", () => {
+    const result = BanSchema.safeParse({
+      id: UUID_A,
+      userId: UUID_A,
+      issuedById: UUID_B,
+      reason: "Denúncia confirmada.",
+      expiresAt: NOW,
+      liftedAt: NOW,
+      liftedById: UUID_B,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita reason vazio", () => {
+    const result = BanSchema.safeParse({
+      id: UUID_A,
+      userId: UUID_A,
+      issuedById: UUID_B,
+      reason: "",
+      expiresAt: null,
+      liftedAt: null,
+      liftedById: null,
+      createdAt: NOW,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ModerationActionRequestSchema", () => {
+  it("aceita dismissed sem banExpiresAt", () => {
+    expect(ModerationActionRequestSchema.safeParse({ action: "dismissed" }).success).toBe(true);
+  });
+
+  it("aceita banned com banExpiresAt nulo (permanente)", () => {
+    const result = ModerationActionRequestSchema.safeParse({ action: "banned", banExpiresAt: null });
+    expect(result.success).toBe(true);
+  });
+
+  it("aceita banned com banExpiresAt futuro", () => {
+    const result = ModerationActionRequestSchema.safeParse({ action: "banned", banExpiresAt: NOW });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita banned sem banExpiresAt (threshold nunca é implícito)", () => {
+    const result = ModerationActionRequestSchema.safeParse({ action: "banned" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("MatchScoreExplanationSchema", () => {
+  it("aceita uma explicação de resultado válida", () => {
+    const metrics = [
+      { key: "posture", raw: 0.8, weight: 0.3, contribution: 0.24 },
+      { key: "eyeContact", raw: 0.8, weight: 0.25, contribution: 0.2 },
+      { key: "expression", raw: 0.8, weight: 0.2, contribution: 0.16 },
+      { key: "presence", raw: 0.8, weight: 0.15, contribution: 0.12 },
+      { key: "movement", raw: 0.8, weight: 0.1, contribution: 0.08 },
+    ];
+    const result = MatchScoreExplanationSchema.safeParse({
+      matchId: UUID_A,
+      scoreVersion: "aura-score-v1",
+      player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12, metrics },
+      player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: -12, metrics },
+      winnerId: UUID_A,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita quando faltam métricas", () => {
+    const result = MatchScoreExplanationSchema.safeParse({
+      matchId: UUID_A,
+      scoreVersion: "aura-score-v1",
+      player1: {
+        userId: UUID_A,
+        score: VALID_AURA_SCORE,
+        ratingDelta: 12,
+        metrics: [{ key: "posture", raw: 0.8, weight: 0.3, contribution: 0.24 }],
+      },
+      player2: { userId: UUID_B, score: VALID_AURA_SCORE, ratingDelta: -12, metrics: [] },
+      winnerId: UUID_A,
+    });
+    expect(result.success).toBe(false);
   });
 });

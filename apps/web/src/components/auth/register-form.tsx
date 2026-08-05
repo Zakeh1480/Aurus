@@ -4,23 +4,32 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { RegisterRequestSchema } from "@aurafarming/shared";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/components/providers/auth-provider";
-import { ApiError } from "@/lib/api-client";
+import { ApiError, usersApi } from "@/lib/api-client";
+import { SITE_TERMS_VERSION } from "@/lib/legal";
 
 const registerFormSchema = RegisterRequestSchema.extend({
   passwordConfirmation: z.string().min(1, "Confirme sua senha."),
-}).refine((value) => value.password === value.passwordConfirmation, {
-  message: "As senhas não coincidem.",
-  path: ["passwordConfirmation"],
-});
+  acceptedTerms: z.boolean(),
+})
+  .refine((value) => value.password === value.passwordConfirmation, {
+    message: "As senhas não coincidem.",
+    path: ["passwordConfirmation"],
+  })
+  .refine((value) => value.acceptedTerms, {
+    message: "Você precisa aceitar os Termos de Uso e a Política de Privacidade.",
+    path: ["acceptedTerms"],
+  });
 
 type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
@@ -31,10 +40,12 @@ export function RegisterForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
+    defaultValues: { acceptedTerms: false },
   });
 
   // Evita corrida com o redirecionamento manual pós-submit abaixo: sem essa
@@ -54,6 +65,9 @@ export function RegisterForm() {
     try {
       await registerAccount({ email: values.email, password: values.password, displayName: values.displayName });
       await login({ email: values.email, password: values.password });
+      // Best-effort: a conta já existe e o login já foi feito — uma falha
+      // aqui não deve travar o usuário numa tela de erro pós-cadastro.
+      await usersApi.grantConsent({ type: "terms", termsVersion: SITE_TERMS_VERSION }).catch(() => undefined);
       router.push("/consentimento");
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -92,6 +106,30 @@ export function RegisterForm() {
           {...register("passwordConfirmation")}
         />
       </FormField>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-start gap-2">
+          <Controller
+            control={control}
+            name="acceptedTerms"
+            render={({ field }) => (
+              <Checkbox
+                id="acceptedTerms"
+                checked={field.value}
+                onCheckedChange={(checked) => field.onChange(checked === true)}
+              />
+            )}
+          />
+          <Label htmlFor="acceptedTerms" className="font-normal">
+            Li e aceito os{" "}
+            <Link href="/termos" className="text-primary underline-offset-4 hover:underline" target="_blank">
+              Termos de Uso e a Política de Privacidade
+            </Link>
+            .
+          </Label>
+        </div>
+        {errors.acceptedTerms ? <p className="text-xs text-destructive">{errors.acceptedTerms.message}</p> : null}
+      </div>
 
       <Button type="submit" disabled={isSubmitting} className="mt-2">
         {isSubmitting ? "Criando conta…" : "Criar conta"}
