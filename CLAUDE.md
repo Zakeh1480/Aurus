@@ -67,7 +67,7 @@ Fairness do score, política de moderação, sign-off de LGPD, precificação e 
 
 ## Estado atual do projeto
 
-MVP funcionalmente completo, construído em 15 iterações disciplinadas ("um prompt = um PR"). HEAD atual é pós-Prompt 14 (commits `d25a367` merge + `cb00399` fix de pipeline).
+MVP funcionalmente completo, construído em 16 iterações disciplinadas ("um prompt = um PR"). HEAD atual é pós-Prompt 15 (duração fixa de partida).
 
 - Prompt 0 — bootstrap do monorepo + contratos Zod (`packages/shared`)
 - Prompt 1 — schema Prisma + docker-compose local
@@ -84,13 +84,14 @@ MVP funcionalmente completo, construído em 15 iterações disciplinadas ("um pr
 - Prompt 11 — sala de batalha (LiveKit + MediaPipe client + anti-cheat)
 - Prompt 12 — ranking global (leaderboard) em `apps/web`
 - Prompt 13 — hardening: segurança, LGPD, moderação
-- Prompt 14 — containers, CI (GitLab) e preparação de deploy ← estado atual
+- Prompt 14 — containers, CI (GitLab) e preparação de deploy
+- Prompt 15 — duração fixa de partida (60s), encerramento forçado server-side ← estado atual
 
 ## Arquitetura implementada
 
 **apps/web** — App Router com route group `(protected)` (guard client-side via `RequireAuth`; **sem `middleware.ts`** de propósito, porque o refresh token vive num cookie httpOnly no domínio da API, não do Next). Auth: access token em memória, refresh em cookie httpOnly com renovação proativa e deduplicação de chamadas concorrentes. Extração MediaPipe roda em Web Worker (`workers/aura-features.worker.ts`) com fallback para main thread, cadência de 1 amostra/segundo. `ws-client` valida todo payload de entrada/saída contra `WsEventSchemas` de `packages/shared`. Testes só com Vitest (lib-level) — sem Playwright/Cypress, sem E2E.
 
-**apps/api** — Módulos NestJS: `auth`, `users`, `consent`, `matchmaking`, `livekit`, `anti-cheat`, `scoring`, `ranking`, `moderation`, `prisma`, `redis`. Três WS Gateways coexistem no mesmo `Server` (`MatchmakingGateway`, `MatchScoringGateway`, `AntiCheatGateway`), todos resolvendo `socket.data.userId` do JWT verificado no handshake — nunca confiam em `payload.userId`. Redis é usado para rate limit/nonces/buffers de score, **não** como adapter de Socket.IO — por isso a API está limitada a **1 réplica** (sem scaling horizontal) até isso ser endereçado. Segredo compartilhado `AI_SERVICE_SHARED_SECRET` (header `X-AI-Service-Secret`) protege toda chamada `apps/api → services/ai`. Prisma é a fonte de verdade durável (`RankingSnapshot`, `Report`/`Ban` append-only, `anonymizedAt` em vez de hard-delete de usuário). 38 arquivos de spec (Vitest).
+**apps/api** — Módulos NestJS: `auth`, `users`, `consent`, `matchmaking`, `livekit`, `anti-cheat`, `scoring`, `ranking`, `moderation`, `prisma`, `redis`. Três WS Gateways coexistem no mesmo `Server` (`MatchmakingGateway`, `MatchScoringGateway`, `AntiCheatGateway`), todos resolvendo `socket.data.userId` do JWT verificado no handshake — nunca confiam em `payload.userId`. Redis é usado para rate limit/nonces/buffers de score, **não** como adapter de Socket.IO — por isso a API está limitada a **1 réplica** (sem scaling horizontal) até isso ser endereçado. Segredo compartilhado `AI_SERVICE_SHARED_SECRET` (header `X-AI-Service-Secret`) protege toda chamada `apps/api → services/ai`. Prisma é a fonte de verdade durável (`RankingSnapshot`, `Report`/`Ban` append-only, `anonymizedAt` em vez de hard-delete de usuário). Partida tem duração fixa (`MATCH_DURATION_SECONDS`, `packages/shared`, Prompt 15): `MatchDurationSchedulerService` (`livekit/`) agenda, a partir de `Match.startedAt`, o encerramento forçado (`ScoringService.finalizeMatch` + `LivekitService.deleteRoom`) mesmo com os dois participantes ainda conectados; `LivekitWebhookController` cancela esse timer quando a partida já termina pelo caminho normal (`participant_left`). 39 arquivos de spec (Vitest).
 
 **services/ai** — FastAPI puro, sem MediaPipe/PyTorch (ver nota em "Stack fixa"). Endpoints: `GET /health`, `POST /score`, `POST /score/aggregate`, `POST /verify`. Scoring é função pura e versionada (`AURA_SCORE_VERSION = "aura-score-v1"`), soma ponderada de 5 métricas; agregação multi-amostra por **mediana por métrica** (robusta a outliers). `/verify` (Prompt 6b) usa heurísticas clássicas de CV (Haar cascade + variância de Laplaciano) sobre um único keyframe, cobrindo só `presence`/`eyeContact`; a comparação temporal entre keyframes (detecção de replay) fica em `apps/api/src/anti-cheat`, não aqui. Sem CORS (server-to-server only). Contrato documentado em `services/ai/CONTRACT.md`. Testes com pytest (6 arquivos, incluindo guard-test de sincronia de constantes com o TS).
 
@@ -111,7 +112,7 @@ MVP funcionalmente completo, construído em 15 iterações disciplinadas ("um pr
 | Pacote            | Framework | Comando                              | Cobertura                                |
 | ----------------- | --------- | ------------------------------------ | ---------------------------------------- |
 | `apps/web`        | Vitest    | `pnpm --filter web test`             | 12 arquivos, lib-level (sem E2E/browser) |
-| `apps/api`        | Vitest    | `pnpm --filter api test`             | 38 arquivos de spec                      |
+| `apps/api`        | Vitest    | `pnpm --filter api test`             | 39 arquivos de spec                      |
 | `services/ai`     | pytest    | `cd services/ai && uv run pytest -v` | 6 arquivos                               |
 | `packages/shared` | Vitest    | `pnpm --filter shared test`          | contratos exaustivamente testados        |
 

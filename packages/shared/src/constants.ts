@@ -2,14 +2,14 @@
  * Versão da função de scoring `score = f(features, AURA_SCORE_VERSION)`.
  * Todo AuraScore persistido carimba essa versão (CLAUDE.md, regra 4).
  */
-export const AURA_SCORE_VERSION = "aura-score-v1";
+export const AURA_SCORE_VERSION = 'aura-score-v1';
 
 export const AURA_METRIC_KEYS = [
-  "posture",
-  "eyeContact",
-  "expression",
-  "presence",
-  "movement",
+  'posture',
+  'eyeContact',
+  'expression',
+  'presence',
+  'movement',
 ] as const;
 
 export type AuraMetricKey = (typeof AURA_METRIC_KEYS)[number];
@@ -27,7 +27,7 @@ export const AURA_SCORE_WEIGHTS: Record<AuraMetricKey, number> = {
  * Versão do algoritmo de trust-score do anti-cheat (Prompt 6b) — carimbada
  * em todo TrustAssessment/AntiCheatIncident persistido.
  */
-export const ANTI_CHEAT_VERSION = "anti-cheat-v1";
+export const ANTI_CHEAT_VERSION = 'anti-cheat-v1';
 
 /**
  * Cutoffs padrão (0-1) das 3 faixas de TrustLevel: score >= highMin => "high";
@@ -39,7 +39,15 @@ export const ANTI_CHEAT_VERSION = "anti-cheat-v1";
 export const ANTI_CHEAT_TRUST_THRESHOLDS = {
   highMin: 0.75,
   lowMax: 0.4,
-} as const satisfies Record<"highMin" | "lowMax", number>;
+} as const satisfies Record<'highMin' | 'lowMax', number>;
 
 /** Tamanho máx. (chars) de um keyframe base64 aceito em match:verify-response — ~300KB decodificados. */
 export const ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH = 400_000;
+
+/**
+ * Duração fixa de uma partida, em segundos (Prompt 15). Contrato entre
+ * client (countdown cosmético em ScoreHud) e server (encerramento forçado
+ * via MatchDurationSchedulerService, a partir de Match.startedAt) — os dois
+ * lados importam daqui para não divergir.
+ */
+export const MATCH_DURATION_SECONDS = 60;

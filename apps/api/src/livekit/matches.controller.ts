@@ -5,7 +5,7 @@ import {
   type LivekitTokenResponse,
   type MatchScoreExplanation,
   type User,
-} from "@aurafarming/shared";
+} from '@aurafarming/shared';
 import {
   ConflictException,
   Controller,
@@ -16,39 +16,44 @@ import {
   ParseUUIDPipe,
   Post,
   UseGuards,
-} from "@nestjs/common";
+} from '@nestjs/common';
 
-import { CurrentUser } from "../auth/decorators/current-user.decorator";
-import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
-import { PrismaService } from "../prisma/prisma.service";
-import { explainMetrics } from "../scoring/score-explanation";
-import { LivekitService } from "./livekit.service";
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PrismaService } from '../prisma/prisma.service';
+import { explainMetrics } from '../scoring/score-explanation';
+import { LivekitService } from './livekit.service';
+import { MatchDurationSchedulerService } from './match-duration-scheduler.service';
 
-@Controller("matches")
+@Controller('matches')
 @UseGuards(JwtAuthGuard)
 export class MatchesController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly livekit: LivekitService,
+    private readonly matchDurationScheduler: MatchDurationSchedulerService,
   ) {}
 
-  @Post(":id/token")
+  @Post(':id/token')
   async issueToken(
-    @Param("id", ParseUUIDPipe) matchId: string,
+    @Param('id', ParseUUIDPipe) matchId: string,
     @CurrentUser() user: User,
   ): Promise<LivekitTokenResponse> {
     const match = await this.prisma.match.findUnique({ where: { id: matchId } });
     if (!match) {
-      throw new NotFoundException("Partida não encontrada.");
+      throw new NotFoundException('Partida não encontrada.');
     }
     if (match.player1Id !== user.id && match.player2Id !== user.id) {
-      throw new ForbiddenException("Você não participa desta partida.");
+      throw new ForbiddenException('Você não participa desta partida.');
     }
-    if (match.status !== "active") {
-      throw new ConflictException("Partida não está ativa.");
+    if (match.status !== 'active') {
+      throw new ConflictException('Partida não está ativa.');
     }
 
     await this.livekit.ensureRoom(matchId);
+    // status já é "active" aqui (checado acima), então startedAt está sempre
+    // presente — o `?? new Date()` é só para satisfazer o tipo DateTime? do Prisma.
+    this.matchDurationScheduler.scheduleForMatch(matchId, match.startedAt ?? new Date());
     const { token, expiresAt } = await this.livekit.createToken(matchId, user.id);
 
     return LivekitTokenResponseSchema.parse({
@@ -66,19 +71,19 @@ export class MatchesController {
    * (revisão de denúncia) — mesmo padrão de autorização de issueToken acima,
    * estendido para role=moderator.
    */
-  @Get(":id/score-explanation")
+  @Get(':id/score-explanation')
   async getScoreExplanation(
-    @Param("id", ParseUUIDPipe) matchId: string,
+    @Param('id', ParseUUIDPipe) matchId: string,
     @CurrentUser() user: User,
   ): Promise<MatchScoreExplanation> {
     const result = await this.prisma.matchResult.findUnique({ where: { matchId } });
     if (!result) {
-      throw new NotFoundException("Resultado da partida não encontrado.");
+      throw new NotFoundException('Resultado da partida não encontrado.');
     }
 
     const isParticipant = result.player1Id === user.id || result.player2Id === user.id;
-    if (!isParticipant && user.role !== "moderator") {
-      throw new ForbiddenException("Você não participa desta partida.");
+    if (!isParticipant && user.role !== 'moderator') {
+      throw new ForbiddenException('Você não participa desta partida.');
     }
 
     const score1 = AuraScoreSchema.parse(result.player1Score);

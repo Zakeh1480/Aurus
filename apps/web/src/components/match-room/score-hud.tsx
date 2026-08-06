@@ -1,16 +1,20 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { AURA_METRIC_KEYS } from "@aurafarming/shared";
+import * as React from 'react';
+import { AURA_METRIC_KEYS, MATCH_DURATION_SECONDS } from '@aurafarming/shared';
 
-import { Progress } from "@/components/ui/progress";
-import type { AuraMetricValues } from "@/lib/aura-features-extraction";
-import { AURA_METRIC_LABELS } from "@/lib/aura-metric-labels";
-import type { LiveScores } from "@/lib/match-room-reducer";
+import { Progress } from '@/components/ui/progress';
+import type { AuraMetricValues } from '@/lib/aura-features-extraction';
+import { AURA_METRIC_LABELS } from '@/lib/aura-metric-labels';
+import type { LiveScores } from '@/lib/match-room-reducer';
 
 function formatElapsed(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
-  const seconds = Math.floor(totalSeconds % 60).toString().padStart(2, "0");
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = Math.floor(totalSeconds % 60)
+    .toString()
+    .padStart(2, '0');
   return `${minutes}:${seconds}`;
 }
 
@@ -40,10 +44,20 @@ export function ScoreHud({ scores, ownMetrics, liveSince }: ScoreHudProps) {
   }, []);
 
   const elapsedSeconds = Math.max(0, Math.floor((now - liveSince) / 1000));
+  // Cosmético — a autoridade real é o servidor (MatchDurationSchedulerService,
+  // contado a partir de Match.startedAt). liveSince é observado no cliente e
+  // normalmente começa um pouco depois do startedAt real, então esta
+  // contagem pode ficar levemente otimista perto do fim.
+  const remainingSeconds = Math.max(0, MATCH_DURATION_SECONDS - elapsedSeconds);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="text-center font-mono text-2xl tabular-nums">{formatElapsed(elapsedSeconds)}</div>
+      <div className="flex flex-col items-center gap-1">
+        <div className="text-center font-mono text-2xl tabular-nums">
+          {formatElapsed(remainingSeconds)}
+        </div>
+        <span className="text-xs text-muted-foreground">tempo restante</span>
+      </div>
 
       <div className="grid grid-cols-2 gap-4">
         <ScoreCard label="Você" value={scores?.self ?? 0} />
@@ -54,7 +68,9 @@ export function ScoreHud({ scores, ownMetrics, liveSince }: ScoreHudProps) {
         <p className="text-xs text-muted-foreground">Sua leitura ao vivo, métrica por métrica</p>
         {AURA_METRIC_KEYS.map((key) => (
           <div key={key} className="flex items-center gap-2">
-            <span className="w-32 shrink-0 text-xs text-muted-foreground">{AURA_METRIC_LABELS[key]}</span>
+            <span className="w-32 shrink-0 text-xs text-muted-foreground">
+              {AURA_METRIC_LABELS[key]}
+            </span>
             <Progress value={ownMetrics?.[key] ?? 0} />
           </div>
         ))}
