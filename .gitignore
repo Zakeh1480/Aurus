@@ -26,3 +26,5 @@ services/ai/.venv/
 !.claude/commands/**
 !.claude/agents/
 !.claude/agents/**
+
+docs/deploy-progress.md
