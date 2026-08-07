@@ -2,7 +2,7 @@ import type { Socket } from 'socket.io';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createHandshakeAuthMiddleware } from './matchmaking-io.adapter';
-import type { MatchmakingService } from './matchmaking.service';
+import { userRoom } from './matchmaking.service';
 import type { WsAuthService } from './ws-auth.service';
 
 function fakeSocket(overrides: Partial<Socket> = {}): Socket {
@@ -12,6 +12,7 @@ function fakeSocket(overrides: Partial<Socket> = {}): Socket {
     handshake: { auth: {} },
     disconnect: vi.fn(),
     emit: vi.fn(),
+    join: vi.fn(),
     ...overrides,
   } as unknown as Socket;
 }
@@ -23,22 +24,17 @@ function fakeSocket(overrides: Partial<Socket> = {}): Socket {
  * precisar de um servidor Socket.IO real nem mockar o createIOServer herdado.
  */
 describe('createHandshakeAuthMiddleware', () => {
-  let matchmakingService: { registerSocket: ReturnType<typeof vi.fn> };
   let wsAuthService: { authenticate: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
-    matchmakingService = { registerSocket: vi.fn() };
     wsAuthService = { authenticate: vi.fn() };
   });
 
   function buildMiddleware() {
-    return createHandshakeAuthMiddleware(
-      wsAuthService as unknown as WsAuthService,
-      matchmakingService as unknown as MatchmakingService,
-    );
+    return createHandshakeAuthMiddleware(wsAuthService as unknown as WsAuthService);
   }
 
-  it('aceita e registra o socket quando o token é válido, chamando next() sem erro', async () => {
+  it('aceita o socket e entra na room do usuário quando o token é válido, chamando next() sem erro', async () => {
     wsAuthService.authenticate.mockResolvedValue('user-a');
     const middleware = buildMiddleware();
     const socket = fakeSocket({ handshake: { auth: { token: 'valid-token' } } as never });
@@ -48,7 +44,7 @@ describe('createHandshakeAuthMiddleware', () => {
     await vi.waitFor(() => expect(next).toHaveBeenCalled());
 
     expect(socket.data.userId).toBe('user-a');
-    expect(matchmakingService.registerSocket).toHaveBeenCalledWith('user-a', socket);
+    expect(socket.join).toHaveBeenCalledWith(userRoom('user-a'));
     expect(next).toHaveBeenCalledWith();
   });
 
@@ -62,7 +58,7 @@ describe('createHandshakeAuthMiddleware', () => {
     await vi.waitFor(() => expect(next).toHaveBeenCalled());
 
     expect(next).toHaveBeenCalledWith(expect.any(Error));
-    expect(matchmakingService.registerSocket).not.toHaveBeenCalled();
+    expect(socket.join).not.toHaveBeenCalled();
     expect(socket.data.userId).toBeUndefined();
   });
 

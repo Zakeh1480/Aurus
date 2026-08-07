@@ -1,13 +1,13 @@
-import type { WsEventName, WsEventPayload } from "@aurafarming/shared";
-import { Injectable, Logger } from "@nestjs/common";
-import { WsException } from "@nestjs/websockets";
-import type { Socket } from "socket.io";
+import type { WsEventName, WsEventPayload } from '@aurafarming/shared';
+import { Injectable, Logger } from '@nestjs/common';
+import { WsException } from '@nestjs/websockets';
+import type { Server } from 'socket.io';
 
-import { PrismaService } from "../prisma/prisma.service";
-import { UsersService } from "../users/users.service";
-import { getAcceptTimeoutMs, getRatingWindowConfig } from "./matchmaking.constants";
-import { type QueueMember, selectBestCandidate } from "./pairing";
-import { QueueService } from "./queue.service";
+import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
+import { getAcceptTimeoutMs, getRatingWindowConfig } from './matchmaking.constants';
+import { type QueueMember, selectBestCandidate } from './pairing';
+import { QueueService } from './queue.service';
 
 interface PendingMatchState {
   player1Id: string;
@@ -16,22 +16,32 @@ interface PendingMatchState {
   timer: NodeJS.Timeout;
 }
 
+/** Room individual por usuário — join no handshake (ver MatchmakingIoAdapter), único canal de emissão. */
+export function userRoom(userId: string): string {
+  return `user:${userId}`;
+}
+
 /**
- * Orquestra fila, pareamento e aceite-com-timeout. Dono único do registro
- * de sockets vivos: o timeout de aceite dispara de forma assíncrona
- * (setTimeout), fora do ciclo de qualquer mensagem que o gateway esteja
- * tratando, então precisa da sua própria forma de emitir eventos.
+ * Orquestra fila, pareamento e aceite-com-timeout. Emite eventos via
+ * `Server.to(userRoom(...))` em vez de guardar referências diretas de
+ * `Socket` — com o adapter Redis do Socket.IO (Prompt 17), isso alcança o
+ * usuário mesmo que o socket dele esteja conectado em outra réplica da API.
+ * O timeout de aceite dispara de forma assíncrona (setTimeout), fora do
+ * ciclo de qualquer mensagem que o gateway esteja tratando, então precisa
+ * da sua própria forma de emitir eventos.
  *
- * Estado de partidas pendentes vive em memória (Map) — limitação assumida
- * de deploy single-instance; múltiplas instâncias exigiriam mover isso
- * para Redis/uma fila de jobs, fora de escopo agora.
+ * Estado de partidas pendentes (`pendingMatches`/`pendingMatchByUser`) ainda
+ * vive em memória (Map) — limitação assumida de deploy single-instance;
+ * múltiplas instâncias exigiriam mover isso para Redis/uma fila de jobs,
+ * fora de escopo agora (diferente da entrega de eventos, que já é
+ * cross-instance-safe).
  */
 @Injectable()
 export class MatchmakingService {
   private readonly logger = new Logger(MatchmakingService.name);
-  private readonly sockets = new Map<string, Socket>();
   private readonly pendingMatches = new Map<string, PendingMatchState>();
   private readonly pendingMatchByUser = new Map<string, string>();
+  private server?: Server;
 
   constructor(
     private readonly queueService: QueueService,
@@ -39,22 +49,31 @@ export class MatchmakingService {
     private readonly usersService: UsersService,
   ) {}
 
-  registerSocket(userId: string, socket: Socket): void {
-    this.sockets.set(userId, socket);
+  /**
+   * Chamado uma única vez por `MatchmakingIoAdapter.createIOServer`, no
+   * bootstrap — mesmo padrão do middleware de autenticação (Prompt 16):
+   * garantia estrutural do adapter, não efeito colateral de qual gateway o
+   * Nest instancia primeiro.
+   */
+  setServer(server: Server): void {
+    this.server = server;
   }
 
   async join(userId: string): Promise<void> {
     const guardClaimed = await this.queueService.claimGuard(userId);
     if (!guardClaimed) {
-      throw new WsException("Usuário já está na fila ou em uma partida pendente.");
+      throw new WsException('Usuário já está na fila ou em uma partida pendente.');
     }
 
     const openMatch = await this.prisma.match.findFirst({
-      where: { status: { in: ["pending", "active"] }, OR: [{ player1Id: userId }, { player2Id: userId }] },
+      where: {
+        status: { in: ['pending', 'active'] },
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+      },
     });
     if (openMatch) {
       await this.queueService.releaseGuard(userId);
-      throw new WsException("Usuário já está em uma partida em andamento.");
+      throw new WsException('Usuário já está em uma partida em andamento.');
     }
 
     const profile = await this.usersService.getProfile(userId);
@@ -76,7 +95,7 @@ export class MatchmakingService {
     const expectedMatchId = this.pendingMatchByUser.get(userId);
     const state = expectedMatchId ? this.pendingMatches.get(expectedMatchId) : undefined;
     if (expectedMatchId !== matchId || !state) {
-      throw new WsException("Partida não encontrada ou já expirada.");
+      throw new WsException('Partida não encontrada ou já expirada.');
     }
 
     state.accepted.add(userId);
@@ -97,26 +116,29 @@ export class MatchmakingService {
     ]);
 
     const startedAt = new Date();
-    await this.prisma.match.update({ where: { id: matchId }, data: { status: "active", startedAt } });
+    await this.prisma.match.update({
+      where: { id: matchId },
+      data: { status: 'active', startedAt },
+    });
 
-    const payload: WsEventPayload<"match:start"> = {
+    const payload: WsEventPayload<'match:start'> = {
       matchId,
       player1Id: state.player1Id,
       player2Id: state.player2Id,
       startedAt: startedAt.toISOString(),
     };
-    this.emitTo(state.player1Id, "match:start", payload);
-    this.emitTo(state.player2Id, "match:start", payload);
+    this.emitTo(state.player1Id, 'match:start', payload);
+    this.emitTo(state.player2Id, 'match:start', payload);
   }
 
+  /**
+   * Idêntico a `leave` desde que o registro direto de sockets saiu daqui
+   * (Prompt 17, Redis adapter) — mantido como método próprio porque o
+   * gateway o chama a partir de um hook de lifecycle diferente
+   * (`OnGatewayDisconnect`), não de uma mensagem `queue:leave`.
+   */
   async handleDisconnect(userId: string): Promise<void> {
-    this.sockets.delete(userId);
-    const matchId = this.pendingMatchByUser.get(userId);
-    if (matchId) {
-      await this.cancelPendingMatch(matchId, userId);
-      return;
-    }
-    await this.queueService.leaveQueue(userId);
+    await this.leave(userId);
   }
 
   /**
@@ -125,18 +147,21 @@ export class MatchmakingService {
    * — não reaproveita `cancelPendingMatch` porque essa lida com estado de
    * pareamento pendente em memória que não existe mais após o match virar `active`.
    */
-  async endActiveMatch(matchId: string, reason: "disconnected" | "cancelled"): Promise<void> {
+  async endActiveMatch(matchId: string, reason: 'disconnected' | 'cancelled'): Promise<void> {
     const match = await this.prisma.match.findUnique({ where: { id: matchId } });
-    if (match?.status !== "active") {
+    if (match?.status !== 'active') {
       return;
     }
 
     const endedAt = new Date();
-    await this.prisma.match.update({ where: { id: matchId }, data: { status: "cancelled", endedAt } });
+    await this.prisma.match.update({
+      where: { id: matchId },
+      data: { status: 'cancelled', endedAt },
+    });
 
     const endedAtIso = endedAt.toISOString();
-    this.emitTo(match.player1Id, "match:end", { matchId, endedAt: endedAtIso, reason });
-    this.emitTo(match.player2Id, "match:end", { matchId, endedAt: endedAtIso, reason });
+    this.emitTo(match.player1Id, 'match:end', { matchId, endedAt: endedAtIso, reason });
+    this.emitTo(match.player2Id, 'match:end', { matchId, endedAt: endedAtIso, reason });
   }
 
   private async tryPairFrom(selfId: string, selfRating: number, now: number): Promise<void> {
@@ -168,25 +193,28 @@ export class MatchmakingService {
   }
 
   /** `waitingMember` já estava na fila (vira player1); `joiningMember` disparou este pareamento (vira player2). */
-  private async finalizePairing(waitingMember: QueueMember, joiningMember: QueueMember): Promise<void> {
+  private async finalizePairing(
+    waitingMember: QueueMember,
+    joiningMember: QueueMember,
+  ): Promise<void> {
     const player1Id = waitingMember.userId;
     const player2Id = joiningMember.userId;
 
     const match = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.match.create({ data: { player1Id, player2Id, status: "pending" } });
+      const created = await tx.match.create({ data: { player1Id, player2Id, status: 'pending' } });
       await tx.matchParticipant.createMany({
         data: [
           {
             matchId: created.id,
             userId: player1Id,
-            side: "player1",
+            side: 'player1',
             ratingBefore: waitingMember.rating,
             ratingAfter: null,
           },
           {
             matchId: created.id,
             userId: player2Id,
-            side: "player2",
+            side: 'player2',
             ratingBefore: joiningMember.rating,
             ratingAfter: null,
           },
@@ -207,16 +235,16 @@ export class MatchmakingService {
     this.pendingMatchByUser.set(player2Id, match.id);
 
     const matchedAt = match.createdAt.toISOString();
-    this.emitTo(player1Id, "queue:matched", {
+    this.emitTo(player1Id, 'queue:matched', {
       matchId: match.id,
       opponentId: player2Id,
-      queueStatus: "matched",
+      queueStatus: 'matched',
       matchedAt,
     });
-    this.emitTo(player2Id, "queue:matched", {
+    this.emitTo(player2Id, 'queue:matched', {
       matchId: match.id,
       opponentId: player1Id,
-      queueStatus: "matched",
+      queueStatus: 'matched',
       matchedAt,
     });
   }
@@ -232,11 +260,22 @@ export class MatchmakingService {
     this.pendingMatchByUser.delete(state.player2Id);
 
     const endedAt = new Date();
-    await this.prisma.match.update({ where: { id: matchId }, data: { status: "cancelled", endedAt } });
+    await this.prisma.match.update({
+      where: { id: matchId },
+      data: { status: 'cancelled', endedAt },
+    });
 
     const endedAtIso = endedAt.toISOString();
-    this.emitTo(state.player1Id, "match:end", { matchId, endedAt: endedAtIso, reason: "cancelled" });
-    this.emitTo(state.player2Id, "match:end", { matchId, endedAt: endedAtIso, reason: "cancelled" });
+    this.emitTo(state.player1Id, 'match:end', {
+      matchId,
+      endedAt: endedAtIso,
+      reason: 'cancelled',
+    });
+    this.emitTo(state.player2Id, 'match:end', {
+      matchId,
+      endedAt: endedAtIso,
+      reason: 'cancelled',
+    });
 
     for (const userId of [state.player1Id, state.player2Id]) {
       if (state.accepted.has(userId) && userId !== forcedNonAcceptUserId) {
@@ -250,8 +289,12 @@ export class MatchmakingService {
     }
   }
 
-  private emitTo<E extends WsEventName>(userId: string, event: E, payload: WsEventPayload<E>): void {
-    this.sockets.get(userId)?.emit(event, payload);
+  private emitTo<E extends WsEventName>(
+    userId: string,
+    event: E,
+    payload: WsEventPayload<E>,
+  ): void {
+    this.server?.to(userRoom(userId)).emit(event, payload);
   }
 
   /**
@@ -267,9 +310,11 @@ export class MatchmakingService {
    * Chamado pelo ModerationModule (Prompt 13) logo após um ban ser aplicado —
    * desconexão nativa do Socket.IO (não é um WsEventSchemas validado); a
    * próxima chamada REST/refresh do usuário já rejeita via activeBanWhere().
-   * No-op se o usuário não tem socket vivo registrado.
+   * `disconnectSockets` (via a room do usuário) alcança o socket mesmo que
+   * ele esteja conectado em outra réplica da API — no-op se não houver
+   * nenhum socket vivo na room.
    */
   disconnectUser(userId: string): void {
-    this.sockets.get(userId)?.disconnect(true);
+    this.server?.in(userRoom(userId)).disconnectSockets(true);
   }
 }
