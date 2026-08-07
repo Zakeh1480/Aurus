@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.constants import AURA_SCORE_VERSION, MAX_REQUEST_BODY_BYTES, SCORE_AGGREGATE_MAX_SAMPLES
+from app.constants import AURA_SCORE_VERSION, SCORE_AGGREGATE_MAX_SAMPLES
 from tests.fixtures import make_features
 
 
