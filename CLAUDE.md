@@ -103,7 +103,7 @@ MVP funcionalmente completo, construído em 17 iterações disciplinadas ("um pr
 ## Infraestrutura e deploy
 
 - `docker-compose.yml` sobe `postgres`, `redis`, `api`, `ai-service` — **`apps/web` não é containerizado**, roda via Vercel/`pnpm dev` nativamente.
-- Dockerfiles multi-stage para `apps/api` (usa `turbo prune` para podar o monorepo) e single-stage para `services/ai`.
+- Dockerfiles multi-stage para `apps/api` (usa `turbo prune` para podar o monorepo) e para `services/ai` (`builder` com `uv sync` → `runtime` só com o `.venv` resolvido e o código; `uv`/`uvx`/`pyproject.toml`/`uv.lock` não vão pra imagem final).
 - CI é 100% GitLab (`.gitlab-ci.yml`): stages `test` (lint, typecheck, test, ai-service, sast) e `build` (build, docker-build) — **sem job de deploy**; deploy é via integração nativa Railway/Vercel configurada manualmente.
 - Deploy: Railway para `apps/api` e `services/ai` (via `railway.json`, builder Dockerfile, `preDeployCommand: prisma migrate deploy` no api), Vercel para `apps/web` (zero-config, root directory `apps/web`), Cloudflare para DNS.
 - `.env` real vive na **raiz do monorepo** (fonte única para dev local); cada app/service tem um `.env.example` espelhando o subconjunto relevante para configurar os dashboards de deploy.
@@ -130,6 +130,5 @@ Já documentadas em `docs/security-checklist.md` ou no próprio código — não
 - Rotação de `AI_SERVICE_SHARED_SECRET` não suporta "chave anterior" — troca exige deploy simultâneo dos dois lados.
 - Sem testes E2E/integração cross-serviço.
 - Rota `apps/web/src/app/_dev/ui` parece página de showcase de componentes — confirmar com o humano se deve ser removida/protegida antes de produção.
-- `services/ai/Dockerfile` continua single-stage (`uv`/`pip`/`apt` presentes na imagem final) — auditoria de segurança (Prompt 16) recomendou converter pra multi-stage (mesmo padrão de `apps/api/Dockerfile`), não aplicado ainda por falta de acesso a `docker build` pra validar no ambiente em que a auditoria rodou.
 - Container Scanning não está no `.gitlab-ci.yml` (só SAST/Secret Detection/Dependency Scanning, Prompt 16) — as imagens do job `docker-build` não são publicadas em nenhum registry, pré-requisito do template.
 - SAST/Secret Detection/Dependency Scanning rodam mas não bloqueiam o pipeline por achado (comportamento padrão do GitLab, só informam a MR) — bloquear exigiria GitLab Ultimate ou script customizado.
