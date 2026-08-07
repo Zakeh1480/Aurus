@@ -1,13 +1,13 @@
-import type { User } from "@aurafarming/shared";
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { PassportStrategy } from "@nestjs/passport";
-import { ExtractJwt, Strategy } from "passport-jwt";
+import type { User } from '@aurafarming/shared';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { activeBanWhere } from "../moderation/ban.util";
-import { PrismaService } from "../prisma/prisma.service";
-import { getJwtSecret } from "./auth.constants";
-import type { JwtPayload } from "./jwt-payload.type";
-import { toPublicUser } from "./mappers/to-public-user.mapper";
+import { activeBanWhere } from '../moderation/ban.util';
+import { PrismaService } from '../prisma/prisma.service';
+import { getJwtSecret, JWT_ALGORITHM } from './auth.constants';
+import type { JwtPayload } from './jwt-payload.type';
+import { toPublicUser } from './mappers/to-public-user.mapper';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -16,6 +16,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: getJwtSecret(),
+      algorithms: [JWT_ALGORITHM],
     });
   }
 

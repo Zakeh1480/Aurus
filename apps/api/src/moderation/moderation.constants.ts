@@ -4,10 +4,11 @@
  * runtime (nunca em escopo de módulo), mesma convenção dos demais `*.constants.ts`.
  */
 export function getModerationBootstrapEmails(): string[] {
-  // Match exato (sem lowercase) — mesma convenção de AuthService.login, que
-  // também não normaliza case do e-mail armazenado.
-  return (process.env["MODERATION_BOOTSTRAP_EMAILS"] ?? "")
-    .split(",")
-    .map((email) => email.trim())
+  // Lowercase — UserSchema.email (packages/shared) normaliza todo e-mail
+  // pra lowercase antes de persistir, então o match aqui precisa da mesma
+  // normalização pra não deixar de promover por divergência de case.
+  return (process.env['MODERATION_BOOTSTRAP_EMAILS'] ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
     .filter((email) => email.length > 0);
 }

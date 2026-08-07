@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 
-import type { JwtPayload } from "../auth/jwt-payload.type";
-import { activeBanWhere } from "../moderation/ban.util";
-import { PrismaService } from "../prisma/prisma.service";
+import { JWT_ALGORITHM } from '../auth/auth.constants';
+import type { JwtPayload } from '../auth/jwt-payload.type';
+import { activeBanWhere } from '../moderation/ban.util';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class WsAuthService {
@@ -20,7 +21,7 @@ export class WsAuthService {
 
     let payload: JwtPayload;
     try {
-      payload = this.jwtService.verify<JwtPayload>(token);
+      payload = this.jwtService.verify<JwtPayload>(token, { algorithms: [JWT_ALGORITHM] });
     } catch {
       throw new UnauthorizedException();
     }

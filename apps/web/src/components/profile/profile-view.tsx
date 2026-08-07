@@ -1,26 +1,30 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { ProfileSchema } from "@aurafarming/shared";
+import * as React from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { ProfileSchema } from '@aurafarming/shared';
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FormField } from "@/components/ui/form-field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { usersApi } from "@/lib/api-client";
-import { profileQueryKey } from "@/lib/query-keys";
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { usersApi } from '@/lib/api-client';
+import { profileQueryKey } from '@/lib/query-keys';
 
 const profileFormSchema = z.object({
   nickname: ProfileSchema.shape.nickname,
-  avatarUrl: z.union([z.url("URL inválida."), z.literal("")]),
-  bio: z.string().max(280, "Máximo de 280 caracteres."),
+  // protocol restrito a http(s) — espelha ProfileSchema.shape.avatarUrl
+  // (packages/shared); aqui é `z.union` em vez de reaproveitar direto
+  // porque o form aceita "" (convertido pra null no submit), que
+  // ProfileSchema.shape.avatarUrl (nullable, não aceita string vazia) rejeita.
+  avatarUrl: z.union([z.url({ protocol: /^https?$/, error: 'URL inválida.' }), z.literal('')]),
+  bio: z.string().max(280, 'Máximo de 280 caracteres.'),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -48,8 +52,8 @@ export function ProfileView() {
     values: profileQuery.data
       ? {
           nickname: profileQuery.data.nickname,
-          avatarUrl: profileQuery.data.avatarUrl ?? "",
-          bio: profileQuery.data.bio ?? "",
+          avatarUrl: profileQuery.data.avatarUrl ?? '',
+          bio: profileQuery.data.bio ?? '',
         }
       : undefined,
   });
@@ -80,8 +84,8 @@ export function ProfileView() {
     setSuccessMessage(false);
     updateMutation.mutate({
       nickname: values.nickname,
-      avatarUrl: values.avatarUrl === "" ? null : values.avatarUrl,
-      bio: values.bio === "" ? null : values.bio,
+      avatarUrl: values.avatarUrl === '' ? null : values.avatarUrl,
+      bio: values.bio === '' ? null : values.bio,
     });
   });
 
@@ -93,7 +97,10 @@ export function ProfileView() {
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Rating" value={String(profile.rating)} />
-          <StatCard label="Aura Score médio" value={profile.auraScoreAvg !== null ? profile.auraScoreAvg.toFixed(2) : "—"} />
+          <StatCard
+            label="Aura Score médio"
+            value={profile.auraScoreAvg !== null ? profile.auraScoreAvg.toFixed(2) : '—'}
+          />
           <StatCard label="Partidas" value={String(profile.matchesPlayed)} />
           <StatCard label="Vitórias / derrotas" value={`${profile.wins} / ${profile.losses}`} />
         </CardContent>
@@ -124,19 +131,23 @@ export function ProfileView() {
             ) : null}
 
             <FormField label="Nickname" htmlFor="nickname" error={errors.nickname?.message}>
-              <Input id="nickname" {...register("nickname")} />
+              <Input id="nickname" {...register('nickname')} />
             </FormField>
 
             <FormField label="URL do avatar" htmlFor="avatarUrl" error={errors.avatarUrl?.message}>
-              <Input id="avatarUrl" placeholder="https://…" {...register("avatarUrl")} />
+              <Input id="avatarUrl" placeholder="https://…" {...register('avatarUrl')} />
             </FormField>
 
             <FormField label="Bio" htmlFor="bio" error={errors.bio?.message}>
-              <Textarea id="bio" rows={3} {...register("bio")} />
+              <Textarea id="bio" rows={3} {...register('bio')} />
             </FormField>
 
-            <Button type="submit" disabled={isSubmitting || updateMutation.isPending} className="self-start">
-              {updateMutation.isPending ? "Salvando…" : "Salvar alterações"}
+            <Button
+              type="submit"
+              disabled={isSubmitting || updateMutation.isPending}
+              className="self-start"
+            >
+              {updateMutation.isPending ? 'Salvando…' : 'Salvar alterações'}
             </Button>
           </form>
         </CardContent>

@@ -19,6 +19,7 @@ from app.constants import (
     ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH,
     ANTI_CHEAT_VERSION,
     AURA_SCORE_VERSION,
+    SCORE_AGGREGATE_MAX_SAMPLES,
 )
 
 
@@ -101,7 +102,7 @@ class ScoreAggregateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    samples: Annotated[list[AuraFeatures], Field(min_length=1)]
+    samples: Annotated[list[AuraFeatures], Field(min_length=1, max_length=SCORE_AGGREGATE_MAX_SAMPLES)]
 
 
 class LivenessFlags(BaseModel):

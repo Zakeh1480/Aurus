@@ -47,6 +47,15 @@ def test_decode_keyframe_corrupt_image_bytes_raises_value_error() -> None:
         decode_keyframe(corrupt)
 
 
+def test_decode_keyframe_oversized_dimensions_raises_value_error() -> None:
+    """Imagem lisa de 6000x6000 (36MP, acima do teto de 25MP) comprime pra um PNG
+    minúsculo — cabe folgada no limite de tamanho do base64, mas não deveria
+    passar pela guarda de decompression-bomb pós-decode."""
+    huge_flat_image = make_flat_image(size=6000)
+    with pytest.raises(ValueError, match="megapixels"):
+        decode_keyframe(encode_image_base64(huge_flat_image))
+
+
 def test_compute_blur_variance_flat_image_is_near_zero() -> None:
     assert compute_blur_variance(make_flat_image()) == pytest.approx(0.0, abs=1e-6)
 

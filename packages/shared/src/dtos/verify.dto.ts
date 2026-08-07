@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { ANTI_CHEAT_VERSION } from "../constants.js";
-import { AuraFeaturesSchema } from "./aura-features.dto.js";
+import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH, ANTI_CHEAT_VERSION } from '../constants.js';
+import { AuraFeaturesSchema } from './aura-features.dto.js';
 
 /**
  * Body de POST /verify no serviço de IA (Prompt 6b). Espelhado manualmente em
@@ -11,7 +11,11 @@ export const VerifyRequestSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
   challengeId: z.uuid(),
-  keyframeBase64: z.string().min(1),
+  // Mesmo teto de MatchVerifyResponsePayloadSchema (events/match.events.ts)
+  // — esse schema é a fronteira de rede real hoje (VerifyRequestSchema só é
+  // construído server-side a partir de um payload já validado), mas manter
+  // os dois em sincronia evita o limite existir "no schema errado".
+  keyframeBase64: z.string().min(1).max(ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH),
   claimedFeatures: AuraFeaturesSchema,
 });
 

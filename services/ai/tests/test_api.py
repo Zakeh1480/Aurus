@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.constants import AURA_SCORE_VERSION
+from app.constants import AURA_SCORE_VERSION, MAX_REQUEST_BODY_BYTES, SCORE_AGGREGATE_MAX_SAMPLES
 from tests.fixtures import make_features
 
 
@@ -57,6 +57,12 @@ def test_score_aggregate_empty_samples_rejected(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_score_aggregate_above_max_samples_rejected(client: TestClient) -> None:
+    samples = [make_features() for _ in range(SCORE_AGGREGATE_MAX_SAMPLES + 1)]
+    response = client.post("/score/aggregate", json={"samples": samples})
+    assert response.status_code == 422
+
+
 def test_score_aggregate_single_sample(client: TestClient) -> None:
     features = make_features()
     response = client.post("/score/aggregate", json={"samples": [features]})
@@ -90,3 +96,13 @@ def test_score_aggregate_overall_matches_weighted_sum(client: TestClient) -> Non
         + breakdown["movement"] * 0.10
     )
     assert body["overall"] == pytest.approx(expected, abs=1e-9)
+
+
+def test_body_size_limit_rejects_oversized_request(client: TestClient) -> None:
+    """Corpo real acima de MAX_REQUEST_BODY_BYTES — o middleware rejeita pelo
+    Content-Length antes de qualquer validação Pydantic rodar (por isso
+    ultrapassa de propósito SCORE_AGGREGATE_MAX_SAMPLES também, sem que isso
+    importe: o corpo nunca chega no parsing pra essa checagem rodar)."""
+    huge_samples = [make_features() for _ in range(20_000)]
+    response = client.post("/score/aggregate", json={"samples": huge_samples})
+    assert response.status_code == 413

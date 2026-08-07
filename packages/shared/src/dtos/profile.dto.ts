@@ -1,10 +1,13 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const ProfileSchema = z.object({
   userId: z.uuid(),
   /** Identidade pública do jogador — pode divergir de User.displayName/avatarUrl. */
   nickname: z.string().min(1).max(32),
-  avatarUrl: z.url().nullable(),
+  // protocol restrito a http(s) — mesmo motivo de UserSchema.avatarUrl
+  // (user.dto.ts): sem allowlist de scheme, um valor armazenado aceitaria
+  // javascript:/data:/vbscript:.
+  avatarUrl: z.url({ protocol: /^https?$/ }).nullable(),
   bio: z.string().max(280).nullable(),
   rating: z.number().int().nonnegative(),
   auraScoreAvg: z.number().min(0).max(1).nullable(),
@@ -29,6 +32,6 @@ export const UpdateProfileRequestSchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
-    message: "Informe ao menos um campo para atualizar.",
+    message: 'Informe ao menos um campo para atualizar.',
   });
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;

@@ -5,22 +5,20 @@ import {
   QueueJoinPayloadSchema,
   type QueueLeavePayload,
   QueueLeavePayloadSchema,
-} from "@aurafarming/shared";
-import { Logger } from "@nestjs/common";
+} from '@aurafarming/shared';
+import { Logger } from '@nestjs/common';
 import {
   ConnectedSocket,
   type OnGatewayDisconnect,
-  type OnGatewayInit,
   MessageBody,
   SubscribeMessage,
   WebSocketGateway,
-} from "@nestjs/websockets";
-import type { Server, Socket } from "socket.io";
+} from '@nestjs/websockets';
+import type { Socket } from 'socket.io';
 
-import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
-import { WsRateLimiterService } from "../common/ws-rate-limiter.service";
-import { MatchmakingService } from "./matchmaking.service";
-import { WsAuthService } from "./ws-auth.service";
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { WsRateLimiterService } from '../common/ws-rate-limiter.service';
+import { MatchmakingService } from './matchmaking.service';
 
 /** Janela fixa de 60s — @nestjs/throttler não cobre gateways WS (Prompt 13). */
 const QUEUE_JOIN_LIMIT = 10;
@@ -28,40 +26,23 @@ const QUEUE_LEAVE_LIMIT = 10;
 const QUEUE_ACCEPT_LIMIT = 10;
 const QUEUE_RATE_WINDOW_MS = 60_000;
 
+/**
+ * Autenticação do handshake (middleware do Socket.IO, `server.use(...)`)
+ * vive em `MatchmakingIoAdapter.createIOServer` (Prompt 16), não aqui —
+ * é compartilhada pelos 3 gateways (`MatchmakingGateway`,
+ * `MatchScoringGateway`, `AntiCheatGateway`) no mesmo `Server`/namespace
+ * default, e registrá-la na criação do server (bootstrap) em vez de no
+ * `afterInit` de um gateway específico evita a autenticação inteira
+ * depender de qual gateway o Nest instancia primeiro.
+ */
 @WebSocketGateway()
-export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
+export class MatchmakingGateway implements OnGatewayDisconnect {
   private readonly logger = new Logger(MatchmakingGateway.name);
 
   constructor(
     private readonly matchmakingService: MatchmakingService,
-    private readonly wsAuthService: WsAuthService,
     private readonly wsRateLimiter: WsRateLimiterService,
   ) {}
-
-  /**
-   * Autenticação via middleware do Socket.IO (não via `handleConnection`):
-   * middleware roda DURANTE o handshake, antes do evento `connect` chegar
-   * ao cliente — `handleConnection` só roda DEPOIS que o cliente já se
-   * considera conectado (e pode emitir mensagens), o que abriria uma
-   * corrida entre a autenticação assíncrona (JWT + Postgres) e uma mensagem
-   * enviada imediatamente. Middleware fecha essa corrida: `socket.data.userId`
-   * está garantidamente populado antes de qualquer `@SubscribeMessage` rodar,
-   * e um token inválido vira `connect_error` no cliente em vez de um
-   * connect-e-desconecta-na-hora.
-   */
-  afterInit(server: Server): void {
-    server.use((socket: Socket, next: (err?: Error) => void) => {
-      const token = socket.handshake.auth?.["token"] as string | undefined;
-      this.wsAuthService
-        .authenticate(token)
-        .then((userId) => {
-          socket.data.userId = userId;
-          this.matchmakingService.registerSocket(userId, socket);
-          next();
-        })
-        .catch(() => next(new Error("Unauthorized")));
-    });
-  }
 
   handleDisconnect(socket: Socket): void {
     const userId = socket.data.userId as string | undefined;
@@ -71,33 +52,54 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
     });
   }
 
-  @SubscribeMessage("queue:join")
+  @SubscribeMessage('queue:join')
   async onQueueJoin(
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(QueueJoinPayloadSchema)) payload: QueueJoinPayload,
   ): Promise<void> {
     const userId = this.requireUserId(socket, payload.userId);
-    if (!(await this.wsRateLimiter.allow(`queue:join:${userId}`, QUEUE_JOIN_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
+    if (
+      !(await this.wsRateLimiter.allow(
+        `queue:join:${userId}`,
+        QUEUE_JOIN_LIMIT,
+        QUEUE_RATE_WINDOW_MS,
+      ))
+    )
+      return;
     await this.matchmakingService.join(userId);
   }
 
-  @SubscribeMessage("queue:leave")
+  @SubscribeMessage('queue:leave')
   async onQueueLeave(
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(QueueLeavePayloadSchema)) payload: QueueLeavePayload,
   ): Promise<void> {
     const userId = this.requireUserId(socket, payload.userId);
-    if (!(await this.wsRateLimiter.allow(`queue:leave:${userId}`, QUEUE_LEAVE_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
+    if (
+      !(await this.wsRateLimiter.allow(
+        `queue:leave:${userId}`,
+        QUEUE_LEAVE_LIMIT,
+        QUEUE_RATE_WINDOW_MS,
+      ))
+    )
+      return;
     await this.matchmakingService.leave(userId);
   }
 
-  @SubscribeMessage("queue:accept")
+  @SubscribeMessage('queue:accept')
   async onQueueAccept(
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(QueueAcceptPayloadSchema)) payload: QueueAcceptPayload,
   ): Promise<void> {
     const userId = socket.data.userId as string;
-    if (!(await this.wsRateLimiter.allow(`queue:accept:${userId}`, QUEUE_ACCEPT_LIMIT, QUEUE_RATE_WINDOW_MS))) return;
+    if (
+      !(await this.wsRateLimiter.allow(
+        `queue:accept:${userId}`,
+        QUEUE_ACCEPT_LIMIT,
+        QUEUE_RATE_WINDOW_MS,
+      ))
+    )
+      return;
     await this.matchmakingService.accept(userId, payload.matchId);
   }
 
@@ -110,7 +112,9 @@ export class MatchmakingGateway implements OnGatewayInit, OnGatewayDisconnect {
   private requireUserId(socket: Socket, payloadUserId: string): string {
     const userId = socket.data.userId as string;
     if (payloadUserId !== userId) {
-      this.logger.warn(`payload.userId (${payloadUserId}) não bate com o socket autenticado (${userId})`);
+      this.logger.warn(
+        `payload.userId (${payloadUserId}) não bate com o socket autenticado (${userId})`,
+      );
     }
     return userId;
   }

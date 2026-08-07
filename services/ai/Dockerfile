@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+# Tag mais específica que ":latest" (que flutua com qualquer release do uv,
+# inclusive major) — consistente com a imagem que .gitlab-ci.yml já usa pro
+# job ai-service, então este é um comportamento já exercitado pelo CI.
+COPY --from=ghcr.io/astral-sh/uv:python3.12-bookworm-slim /uv /uvx /bin/
 
 WORKDIR /app
 

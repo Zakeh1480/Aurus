@@ -5,6 +5,16 @@
 # Container Scanning customization: https://docs.gitlab.com/user/application_security/container_scanning/#customizing-analyzer-behavior
 # Note that environment variables can be set in several places
 # See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
+#
+# Container Scanning fica de fora de propósito (Prompt 16): as imagens
+# buildadas no job docker-build abaixo não são publicadas em nenhum
+# registry, e o template exige uma imagem endereçável (CS_IMAGE) — decisão
+# de arquitetura de CI maior, não uma correção pontual.
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+
 stages:
   - test
   - build
@@ -94,8 +104,3 @@ docker-build:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-
-sast:
-  stage: test
-include:
-  - template: Security/SAST.gitlab-ci.yml

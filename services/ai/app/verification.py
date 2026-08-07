@@ -22,7 +22,7 @@ import cv2
 import numpy as np
 
 from app.config import Settings, get_settings
-from app.constants import ANTI_CHEAT_VERSION
+from app.constants import ANTI_CHEAT_VERSION, VERIFY_MAX_IMAGE_MEGAPIXELS
 from app.schemas import AuraFeatures, LivenessFlags, VerifyRequest, VerifyResponse
 from app.utils.time import to_iso_z, utc_now_iso
 
@@ -53,6 +53,14 @@ def decode_keyframe(keyframe_base64: str) -> np.ndarray:
     image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError("keyframeBase64 não decodifica para uma imagem suportada (JPEG/PNG)")
+    # cv2.imdecode não tem guarda de decompression-bomb — uma imagem craftada
+    # (ex. PNG de cor sólida) cabe folgada no limite de base64 comprimido
+    # (ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH) mas decodifica pra um array de
+    # centenas de megapixels, gastando memória/CPU muito além do esperado
+    # pra um keyframe de webcam.
+    megapixels = (image.shape[0] * image.shape[1]) / 1_000_000
+    if megapixels > VERIFY_MAX_IMAGE_MEGAPIXELS:
+        raise ValueError(f"keyframe decodificado excede o limite de {VERIFY_MAX_IMAGE_MEGAPIXELS} megapixels")
     return image
 
 
