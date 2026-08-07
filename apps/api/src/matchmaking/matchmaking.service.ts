@@ -1,20 +1,17 @@
 import type { WsEventName, WsEventPayload } from '@aurafarming/shared';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import type { Server } from 'socket.io';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { getAcceptTimeoutMs, getRatingWindowConfig } from './matchmaking.constants';
+import { getAcceptPollIntervalMs, getRatingWindowConfig } from './matchmaking.constants';
 import { type QueueMember, selectBestCandidate } from './pairing';
+import { PendingMatchService } from './pending-match.service';
 import { QueueService } from './queue.service';
 
-interface PendingMatchState {
-  player1Id: string;
-  player2Id: string;
-  accepted: Set<string>;
-  timer: NodeJS.Timeout;
-}
+/** Teto por chamada de `PendingMatchService.pollExpired` — `pollExpiredPendingMatches` drena em loop até vir menos que isso. */
+const POLL_BATCH_SIZE = 50;
 
 /** Room individual por usuário — join no handshake (ver MatchmakingIoAdapter), único canal de emissão. */
 export function userRoom(userId: string): string {
@@ -26,28 +23,40 @@ export function userRoom(userId: string): string {
  * `Server.to(userRoom(...))` em vez de guardar referências diretas de
  * `Socket` — com o adapter Redis do Socket.IO (Prompt 17), isso alcança o
  * usuário mesmo que o socket dele esteja conectado em outra réplica da API.
- * O timeout de aceite dispara de forma assíncrona (setTimeout), fora do
- * ciclo de qualquer mensagem que o gateway esteja tratando, então precisa
- * da sua própria forma de emitir eventos.
  *
- * Estado de partidas pendentes (`pendingMatches`/`pendingMatchByUser`) ainda
- * vive em memória (Map) — limitação assumida de deploy single-instance;
- * múltiplas instâncias exigiriam mover isso para Redis/uma fila de jobs,
- * fora de escopo agora (diferente da entrega de eventos, que já é
- * cross-instance-safe).
+ * Estado de partidas pendentes (`PendingMatchService`, Prompt 19) vive em
+ * Redis, não em memória — um `accept` ou uma desconexão podem chegar em
+ * qualquer réplica e ainda assim encontrar/resolver a partida pendente
+ * corretamente. O timeout de aceite não é mais um `setTimeout` local: é um
+ * poller (`pollExpiredPendingMatches`, iniciado em `onModuleInit`) que varre
+ * o ZSET de expiração compartilhado a cada `getAcceptPollIntervalMs()` — a
+ * réplica que "vence" a corrida de reivindicar um matchId vencido é quem
+ * processa o cancelamento; as demais recebem `not_found` e não fazem nada.
  */
 @Injectable()
-export class MatchmakingService {
+export class MatchmakingService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MatchmakingService.name);
-  private readonly pendingMatches = new Map<string, PendingMatchState>();
-  private readonly pendingMatchByUser = new Map<string, string>();
   private server?: Server;
+  private pollTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly queueService: QueueService,
+    private readonly pendingMatchService: PendingMatchService,
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
   ) {}
+
+  onModuleInit(): void {
+    this.pollTimer = setInterval(() => {
+      this.pollExpiredPendingMatches().catch((error: unknown) => {
+        this.logger.error('Falha ao varrer partidas pendentes vencidas', error);
+      });
+    }, getAcceptPollIntervalMs());
+  }
+
+  onModuleDestroy(): void {
+    clearInterval(this.pollTimer);
+  }
 
   /**
    * Chamado uma única vez por `MatchmakingIoAdapter.createIOServer`, no
@@ -83,7 +92,7 @@ export class MatchmakingService {
   }
 
   async leave(userId: string): Promise<void> {
-    const matchId = this.pendingMatchByUser.get(userId);
+    const matchId = await this.pendingMatchService.getPendingMatchId(userId);
     if (matchId) {
       await this.cancelPendingMatch(matchId, userId);
       return;
@@ -92,27 +101,20 @@ export class MatchmakingService {
   }
 
   async accept(userId: string, matchId: string): Promise<void> {
-    const expectedMatchId = this.pendingMatchByUser.get(userId);
-    const state = expectedMatchId ? this.pendingMatches.get(expectedMatchId) : undefined;
-    if (expectedMatchId !== matchId || !state) {
+    const result = await this.pendingMatchService.accept(matchId, userId);
+    if (result.status === 'not_found') {
       throw new WsException('Partida não encontrada ou já expirada.');
     }
-
-    state.accepted.add(userId);
-    if (state.accepted.size < 2) {
+    if (result.status === 'waiting') {
       return;
     }
 
-    clearTimeout(state.timer);
-    this.pendingMatches.delete(matchId);
-    this.pendingMatchByUser.delete(state.player1Id);
-    this.pendingMatchByUser.delete(state.player2Id);
-
+    const { player1Id, player2Id } = result;
     await Promise.all([
-      this.queueService.releaseGuard(state.player1Id),
-      this.queueService.releaseGuard(state.player2Id),
-      this.queueService.clearWaitClock(state.player1Id),
-      this.queueService.clearWaitClock(state.player2Id),
+      this.queueService.releaseGuard(player1Id),
+      this.queueService.releaseGuard(player2Id),
+      this.queueService.clearWaitClock(player1Id),
+      this.queueService.clearWaitClock(player2Id),
     ]);
 
     const startedAt = new Date();
@@ -123,12 +125,12 @@ export class MatchmakingService {
 
     const payload: WsEventPayload<'match:start'> = {
       matchId,
-      player1Id: state.player1Id,
-      player2Id: state.player2Id,
+      player1Id,
+      player2Id,
       startedAt: startedAt.toISOString(),
     };
-    this.emitTo(state.player1Id, 'match:start', payload);
-    this.emitTo(state.player2Id, 'match:start', payload);
+    this.emitTo(player1Id, 'match:start', payload);
+    this.emitTo(player2Id, 'match:start', payload);
   }
 
   /**
@@ -145,7 +147,7 @@ export class MatchmakingService {
    * Chamado pelo webhook do LiveKit quando um participante sai da room de uma
    * partida em andamento. Idempotente (no-op se a partida já não está `active`)
    * — não reaproveita `cancelPendingMatch` porque essa lida com estado de
-   * pareamento pendente em memória que não existe mais após o match virar `active`.
+   * pareamento pendente que não existe mais após o match virar `active`.
    */
   async endActiveMatch(matchId: string, reason: 'disconnected' | 'cancelled'): Promise<void> {
     const match = await this.prisma.match.findUnique({ where: { id: matchId } });
@@ -223,16 +225,7 @@ export class MatchmakingService {
       return created;
     });
 
-    const timer = setTimeout(() => {
-      this.cancelPendingMatch(match.id).catch((error: unknown) => {
-        this.logger.error(`Falha ao cancelar partida pendente ${match.id} por timeout`, error);
-      });
-    }, getAcceptTimeoutMs());
-
-    const state: PendingMatchState = { player1Id, player2Id, accepted: new Set(), timer };
-    this.pendingMatches.set(match.id, state);
-    this.pendingMatchByUser.set(player1Id, match.id);
-    this.pendingMatchByUser.set(player2Id, match.id);
+    await this.pendingMatchService.create(match.id, player1Id, player2Id);
 
     const matchedAt = match.createdAt.toISOString();
     this.emitTo(player1Id, 'queue:matched', {
@@ -249,15 +242,35 @@ export class MatchmakingService {
     });
   }
 
-  /** Compartilhado pelo timeout de aceite e pela desconexão — idempotente (no-op se já finalizado). */
-  private async cancelPendingMatch(matchId: string, forcedNonAcceptUserId?: string): Promise<void> {
-    const state = this.pendingMatches.get(matchId);
-    if (!state) return;
+  /**
+   * Varre o ZSET de expiração cross-instance e reivindica cada matchId vencido — chamada
+   * periodicamente pelo poller de `onModuleInit`, mas exposta como método público porque é
+   * análoga a um hook de lifecycle (testes chamam diretamente, sem depender de timers reais).
+   * Drena em loop dentro do próprio tick (em vez de processar só uma página por intervalo) para
+   * não deixar backlog crescer se, por algum motivo, mais candidatos vencerem do que o teto de
+   * uma única chamada de `pollExpired`.
+   */
+  async pollExpiredPendingMatches(): Promise<void> {
+    const now = Date.now();
+    for (;;) {
+      const dueMatchIds = await this.pendingMatchService.pollExpired(now, POLL_BATCH_SIZE);
+      for (const matchId of dueMatchIds) {
+        await this.cancelPendingMatch(matchId).catch((error: unknown) => {
+          this.logger.error(`Falha ao cancelar partida pendente ${matchId} por timeout`, error);
+        });
+      }
+      if (dueMatchIds.length < POLL_BATCH_SIZE) {
+        return;
+      }
+    }
+  }
 
-    clearTimeout(state.timer);
-    this.pendingMatches.delete(matchId);
-    this.pendingMatchByUser.delete(state.player1Id);
-    this.pendingMatchByUser.delete(state.player2Id);
+  /** Compartilhado pelo poller de timeout e pela desconexão — idempotente (no-op se já finalizado). */
+  private async cancelPendingMatch(matchId: string, forcedNonAcceptUserId?: string): Promise<void> {
+    const result = await this.pendingMatchService.claimAndCancel(matchId);
+    if (result.status === 'not_found') return;
+
+    const { player1Id, player2Id, acceptedUserIds } = result;
 
     const endedAt = new Date();
     await this.prisma.match.update({
@@ -266,19 +279,19 @@ export class MatchmakingService {
     });
 
     const endedAtIso = endedAt.toISOString();
-    this.emitTo(state.player1Id, 'match:end', {
+    this.emitTo(player1Id, 'match:end', {
       matchId,
       endedAt: endedAtIso,
       reason: 'cancelled',
     });
-    this.emitTo(state.player2Id, 'match:end', {
+    this.emitTo(player2Id, 'match:end', {
       matchId,
       endedAt: endedAtIso,
       reason: 'cancelled',
     });
 
-    for (const userId of [state.player1Id, state.player2Id]) {
-      if (state.accepted.has(userId) && userId !== forcedNonAcceptUserId) {
+    for (const userId of [player1Id, player2Id]) {
+      if (acceptedUserIds.includes(userId) && userId !== forcedNonAcceptUserId) {
         const now = Date.now();
         const profile = await this.usersService.getProfile(userId);
         await this.queueService.addToQueue(userId, profile.rating, now);

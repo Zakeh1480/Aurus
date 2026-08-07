@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { getAcceptTimeoutMs } from './matchmaking.constants';
 import { MatchmakingService, userRoom } from './matchmaking.service';
+import type { AcceptResult, CancelResult } from './pending-match.service';
+import { PendingMatchService } from './pending-match.service';
 import { QueueService } from './queue.service';
 
 function buildProfile(overrides: Partial<Profile> = {}): Profile {
@@ -55,6 +58,92 @@ function fakeServer() {
   return { server: server as unknown as Server, recorded, disconnectedRooms };
 }
 
+interface FakePendingEntry {
+  player1Id: string;
+  player2Id: string;
+  acceptedP1: boolean;
+  acceptedP2: boolean;
+  expiresAtMs: number;
+}
+
+/**
+ * Reimplementa as 5 operações de `PendingMatchService` com um `Map` local em vez de
+ * `mockResolvedValueOnce` por chamada — os testes de accept/timeout/desconexão exercitam
+ * transições de estado reais (segundo accept vê as duas flags, claimAndCancel é idempotente de
+ * verdade) em vez de depender de acertar manualmente a sequência de retornos mockados para cada
+ * branch. `pending-match.service.spec.ts` cobre a implementação real (Redis/Lua) à parte.
+ */
+function fakePendingMatchService() {
+  const byMatchId = new Map<string, FakePendingEntry>();
+  const byUserId = new Map<string, string>();
+
+  return {
+    create: vi.fn(async (matchId: string, player1Id: string, player2Id: string): Promise<void> => {
+      byMatchId.set(matchId, {
+        player1Id,
+        player2Id,
+        acceptedP1: false,
+        acceptedP2: false,
+        expiresAtMs: Date.now() + getAcceptTimeoutMs(),
+      });
+      byUserId.set(player1Id, matchId);
+      byUserId.set(player2Id, matchId);
+    }),
+
+    getPendingMatchId: vi.fn(async (userId: string): Promise<string | null> => {
+      return byUserId.get(userId) ?? null;
+    }),
+
+    accept: vi.fn(async (matchId: string, userId: string): Promise<AcceptResult> => {
+      const entry = byMatchId.get(matchId);
+      if (!entry) return { status: 'not_found' };
+      if (userId !== entry.player1Id && userId !== entry.player2Id) return { status: 'not_found' };
+
+      if (userId === entry.player1Id) entry.acceptedP1 = true;
+      else entry.acceptedP2 = true;
+
+      if (entry.acceptedP1 && entry.acceptedP2) {
+        byMatchId.delete(matchId);
+        byUserId.delete(entry.player1Id);
+        byUserId.delete(entry.player2Id);
+        return { status: 'both_accepted', player1Id: entry.player1Id, player2Id: entry.player2Id };
+      }
+      return { status: 'waiting' };
+    }),
+
+    claimAndCancel: vi.fn(async (matchId: string): Promise<CancelResult> => {
+      const entry = byMatchId.get(matchId);
+      if (!entry) return { status: 'not_found' };
+
+      byMatchId.delete(matchId);
+      byUserId.delete(entry.player1Id);
+      byUserId.delete(entry.player2Id);
+
+      const acceptedUserIds: string[] = [];
+      if (entry.acceptedP1) acceptedUserIds.push(entry.player1Id);
+      if (entry.acceptedP2) acceptedUserIds.push(entry.player2Id);
+
+      return {
+        status: 'cancelled',
+        player1Id: entry.player1Id,
+        player2Id: entry.player2Id,
+        acceptedUserIds,
+      };
+    }),
+
+    pollExpired: vi.fn(async (nowMs: number, limit = 50): Promise<string[]> => {
+      const due: string[] = [];
+      for (const [matchId, entry] of byMatchId) {
+        if (entry.expiresAtMs <= nowMs) {
+          due.push(matchId);
+          if (due.length >= limit) break;
+        }
+      }
+      return due;
+    }),
+  };
+}
+
 describe('MatchmakingService', () => {
   let service: MatchmakingService;
   let server: ReturnType<typeof fakeServer>;
@@ -68,6 +157,7 @@ describe('MatchmakingService', () => {
     findCandidates: ReturnType<typeof vi.fn>;
     claimPair: ReturnType<typeof vi.fn>;
   };
+  let pendingMatchService: ReturnType<typeof fakePendingMatchService>;
   let prisma: {
     match: {
       findFirst: ReturnType<typeof vi.fn>;
@@ -93,6 +183,7 @@ describe('MatchmakingService', () => {
       findCandidates: vi.fn(),
       claimPair: vi.fn(),
     };
+    pendingMatchService = fakePendingMatchService();
     txMock = {
       match: { create: vi.fn() },
       matchParticipant: { createMany: vi.fn() },
@@ -111,6 +202,7 @@ describe('MatchmakingService', () => {
       providers: [
         MatchmakingService,
         { provide: QueueService, useValue: queueService },
+        { provide: PendingMatchService, useValue: pendingMatchService },
         { provide: PrismaService, useValue: prisma },
         { provide: UsersService, useValue: usersService },
       ],
@@ -122,7 +214,7 @@ describe('MatchmakingService', () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   /** Pareia user-a (já esperando) com user-b (quem dispara o pareamento). */
@@ -245,14 +337,17 @@ describe('MatchmakingService', () => {
   });
 
   describe('aceite com timeout', () => {
+    const baseTime = new Date('2026-01-01T00:00:00.000Z').getTime();
+
     it('timeout cancela e recoloca só quem aceitou', async () => {
-      vi.useFakeTimers();
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseTime);
       const { matchId } = await setupPendingMatch();
 
       await service.accept('user-a', matchId);
       queueService.findCandidates.mockResolvedValue([]);
 
-      await vi.advanceTimersByTimeAsync(10_000);
+      dateNowSpy.mockReturnValue(baseTime + getAcceptTimeoutMs());
+      await service.pollExpiredPendingMatches();
 
       expect(prisma.match.update).toHaveBeenCalledWith({
         where: { id: matchId },
@@ -277,8 +372,8 @@ describe('MatchmakingService', () => {
       expect(queueService.leaveQueue).toHaveBeenCalledWith('user-b');
     });
 
-    it('ambos aceitam a tempo: ativa a partida e cancela o timer (sem cancelamento tardio)', async () => {
-      vi.useFakeTimers();
+    it('ambos aceitam a tempo: ativa a partida e não sofre cancelamento tardio num poll seguinte', async () => {
+      const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(baseTime);
       const { matchId } = await setupPendingMatch();
 
       await service.accept('user-a', matchId);
@@ -305,7 +400,10 @@ describe('MatchmakingService', () => {
         payload: expectedStartPayload,
       });
 
-      await vi.advanceTimersByTimeAsync(60_000);
+      // Um poll que rodasse depois do timeout original não encontra mais nada pra cancelar —
+      // accept já removeu a entrada do PendingMatchService.
+      dateNowSpy.mockReturnValue(baseTime + 60_000);
+      await service.pollExpiredPendingMatches();
       expect(prisma.match.update).toHaveBeenCalledTimes(1);
     });
 
@@ -319,7 +417,6 @@ describe('MatchmakingService', () => {
 
   describe('desconexão', () => {
     it('em partida pendente: recoloca quem aceitou, libera quem não aceitou', async () => {
-      vi.useFakeTimers();
       const { matchId } = await setupPendingMatch();
       await service.accept('user-a', matchId);
       queueService.findCandidates.mockResolvedValue([]);
@@ -335,7 +432,6 @@ describe('MatchmakingService', () => {
     });
 
     it('desconexão do próprio jogador que tinha aceitado força não-requeue dele mesmo', async () => {
-      vi.useFakeTimers();
       const { matchId } = await setupPendingMatch();
       await service.accept('user-a', matchId);
 
@@ -347,7 +443,6 @@ describe('MatchmakingService', () => {
     });
 
     it('mesmo desconectando, o outro jogador ainda recebe match:end (a room dele é alcançada normalmente)', async () => {
-      vi.useFakeTimers();
       const { matchId } = await setupPendingMatch();
       await service.accept('user-a', matchId);
 
@@ -428,6 +523,7 @@ describe('MatchmakingService', () => {
         providers: [
           MatchmakingService,
           { provide: QueueService, useValue: queueService },
+          { provide: PendingMatchService, useValue: pendingMatchService },
           { provide: PrismaService, useValue: prisma },
           { provide: UsersService, useValue: usersService },
         ],

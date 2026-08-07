@@ -7,17 +7,22 @@ export interface RatingWindowConfig {
 
 export function getRatingWindowConfig(): RatingWindowConfig {
   return {
-    base: Number(process.env["MATCH_RATING_WINDOW_BASE"] ?? 50),
-    step: Number(process.env["MATCH_RATING_WINDOW_STEP"] ?? 25),
-    stepMs: Number(process.env["MATCH_RATING_WINDOW_STEP_MS"] ?? 5000),
-    max: Number(process.env["MATCH_RATING_WINDOW_MAX"] ?? 400),
+    base: Number(process.env['MATCH_RATING_WINDOW_BASE'] ?? 50),
+    step: Number(process.env['MATCH_RATING_WINDOW_STEP'] ?? 25),
+    stepMs: Number(process.env['MATCH_RATING_WINDOW_STEP_MS'] ?? 5000),
+    max: Number(process.env['MATCH_RATING_WINDOW_MAX'] ?? 400),
   };
 }
 
 export function getAcceptTimeoutMs(): number {
-  return Number(process.env["MATCH_ACCEPT_TIMEOUT_MS"] ?? 10_000);
+  return Number(process.env['MATCH_ACCEPT_TIMEOUT_MS'] ?? 10_000);
 }
 
 export function getGuardTtlMs(): number {
-  return Number(process.env["MATCH_GUARD_TTL_MS"] ?? 21_600_000);
+  return Number(process.env['MATCH_GUARD_TTL_MS'] ?? 21_600_000);
+}
+
+/** Cadência do poller cross-instance que varre `mm:pending:expiry` por partidas pendentes vencidas. */
+export function getAcceptPollIntervalMs(): number {
+  return Number(process.env['MATCH_ACCEPT_POLL_INTERVAL_MS'] ?? 1000);
 }
