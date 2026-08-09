@@ -147,6 +147,25 @@ container_scanning_ai:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
+smoke-test:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  needs: ["docker-build"]
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    SMOKE_TEST_MODE: "ci"
+    API_IMAGE: "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
+    AI_IMAGE: "$CI_REGISTRY_IMAGE/ai:$CI_COMMIT_SHA"
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+  script:
+    - sh scripts/smoke-test.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
 # Sem `needs:`/`dependencies:` de propósito (Prompt 25): sem isso, o GitLab
 # por padrão baixa os artifacts de TODOS os jobs dos estágios anteriores
 # (test + build) — inclui os relatórios de SAST/Secret Detection/Dependency

@@ -1,0 +1,33 @@
+# Override usado só pelo smoke test cross-serviço do CI (Prompt 26,
+# scripts/smoke-test.sh) — nunca pelo `docker compose up` normal de
+# desenvolvimento. Sem segredos: os valores abaixo são dummies óbvios,
+# usados só para satisfazer as env vars que fazem apps/api falhar no boot
+# (JWT_SECRET, REDIS_URL/DATABASE_URL já resolvidos no docker-compose.yml
+# base, e — menos óbvio — LIVEKIT_API_KEY/LIVEKIT_API_SECRET/LIVEKIT_URL,
+# porque LivekitService é instanciado eagerly no boot do Nest mesmo sem
+# nenhuma rota LiveKit ser chamada). `environment:` sempre vence sobre
+# `env_file:` na precedência do Compose, então isso funciona mesmo se já
+# existir um `.env` real (incompleto ou com placeholders) na raiz.
+#
+# API_IMAGE/AI_IMAGE apontam por padrão para as tags que `docker compose
+# build` já produz localmente — em CI, o job exporta essas duas variáveis
+# apontando para as tags publicadas no Container Registry (Prompt 24) e faz
+# `docker compose pull` antes do `up`, então esse default nunca é usado lá.
+services:
+  api:
+    image: ${API_IMAGE:-aurafarming-api:ci}
+    environment:
+      JWT_SECRET: ci-smoke-dummy-jwt-secret
+      LIVEKIT_API_KEY: ci-smoke-dummy
+      LIVEKIT_API_SECRET: ci-smoke-dummy
+      LIVEKIT_URL: wss://ci-smoke-dummy.invalid
+      AI_SERVICE_SHARED_SECRET: ci-smoke-dummy-shared-secret
+
+  ai-service:
+    image: ${AI_IMAGE:-aurafarming-ai:ci}
+    environment:
+      AI_SERVICE_SHARED_SECRET: ci-smoke-dummy-shared-secret
+
+networks:
+  default:
+    name: aurafarming_ci_net
