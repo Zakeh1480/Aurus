@@ -42,6 +42,12 @@ Checklist prático para revisar antes de expor a plataforma publicamente. Reexec
 - [x] `ConsentType` agora cobre `"terms"` além de `"camera"` — cadastro exige aceite explícito dos Termos de Uso/Política de Privacidade antes de criar a conta.
 - [ ] **Texto de `/termos` é placeholder** — estrutura de seções pronta, mas o conteúdo jurídico final precisa de revisão humana antes do lançamento (CLAUDE.md, "Trilha humana": sign-off de LGPD é decisão do humano).
 
+## Gate de severidade no CI (Prompt 25)
+
+- [x] SAST, Secret Detection, Dependency Scanning (todos desde o Prompt 16) e Container Scanning (Prompt 24) rodam via templates gerenciados do GitLab, que por padrão só anotam a MR — não bloqueiam o pipeline por achado (isso exigiria GitLab Ultimate). `scripts/check-security-reports.mjs` é a alternativa gratuita: um job novo, `security-gate` (stage final, depois de `test` e `build`), lê os relatórios JSON que cada template gera (`gl-sast-report.json`, `gl-secret-detection-report.json`, `gl-dependency-scanning-report.json`, `gl-container-scanning-report.json` — os que existirem; ausência de um deles não é erro) e falha o job se algum achado tiver severidade >= `SECURITY_GATE_MIN_SEVERITY` (variável de CI, default `"High"`; ordem: `Info < Unknown < Low < Medium < High < Critical`).
+- [x] `security-gate` não declara `needs:`/`dependencies:` de propósito — herda os artifacts de todos os jobs dos estágios `test`/`build` por padrão do GitLab, sem depender do nome exato de cada job de scanner (que varia por versão/template).
+- **Falso positivo ou risco aceito**: adicionar o `id` da vulnerabilidade (campo `id` no JSON do relatório) num array em `.security-gate-allowlist.json` na raiz do projeto (arquivo opcional, não existe por padrão — só criar quando o primeiro caso aparecer). Achados nesse array são ignorados pelo gate mas continuam aparecendo normalmente na aba de segurança da MR no GitLab.
+
 ## Como reverificar
 
 ```bash

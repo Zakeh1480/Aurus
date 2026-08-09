@@ -15,9 +15,14 @@ include:
 stages:
   - test
   - build
+  - security-gate
 
 variables:
   PNPM_STORE_PATH: "$CI_PROJECT_DIR/.pnpm-store"
+  # Threshold do gate de severidade (Prompt 25, scripts/check-security-reports.mjs).
+  # Achados >= este valor falham o job security-gate. Ajustável por pipeline/CI
+  # variable sem precisar mexer no script.
+  SECURITY_GATE_MIN_SEVERITY: "High"
 
 .node_setup:
   image: node:22-bookworm-slim
@@ -138,6 +143,21 @@ container_scanning_ai:
     CS_IMAGE: "$CI_REGISTRY_IMAGE/ai:$CI_COMMIT_SHA"
     CS_REGISTRY_USER: "$CI_REGISTRY_USER"
     CS_REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# Sem `needs:`/`dependencies:` de propósito (Prompt 25): sem isso, o GitLab
+# por padrão baixa os artifacts de TODOS os jobs dos estágios anteriores
+# (test + build) — inclui os relatórios de SAST/Secret Detection/Dependency
+# Scanning (stage test) e dos dois container_scanning_* (stage build) sem
+# precisar acertar o nome exato de cada job, que varia por versão/template
+# do GitLab.
+security-gate:
+  stage: security-gate
+  image: node:22-bookworm-slim
+  script:
+    - node scripts/check-security-reports.mjs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
