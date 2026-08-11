@@ -29,6 +29,16 @@ function buildConnectSrc(): string {
   return sources.join(' ');
 }
 
+function buildImgSrc(): string {
+  const sources = [
+    "'self'",
+    'data:',
+    'blob:',
+    process.env['NEXT_PUBLIC_AVATAR_PUBLIC_BASE_URL'],
+  ].filter((source): source is string => Boolean(source));
+  return sources.join(' ');
+}
+
 const CSP_DIRECTIVES = [
   "default-src 'self'",
   // 'wasm-unsafe-eval': MediaPipe roda inferência via WASM no cliente (regra
@@ -36,8 +46,9 @@ const CSP_DIRECTIVES = [
   "script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net",
   "worker-src 'self' blob:",
   `connect-src ${buildConnectSrc()}`,
-  // blob: cobre preview local de avatar/snapshot; data: cobre ícones inline.
-  "img-src 'self' data: blob:",
+  // blob: cobre preview local de avatar antes do upload; data: cobre ícones
+  // inline; NEXT_PUBLIC_AVATAR_PUBLIC_BASE_URL cobre o avatar já hospedado.
+  `img-src ${buildImgSrc()}`,
   "media-src 'self' blob:",
   // Tailwind/shadcn não usam nonce hoje — 'unsafe-inline' é o trade-off aceito.
   "style-src 'self' 'unsafe-inline'",

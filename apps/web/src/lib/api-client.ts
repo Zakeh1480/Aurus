@@ -1,6 +1,8 @@
-import { z } from "zod";
+import { z } from 'zod';
 import {
   AuthResponseSchema,
+  type ChangeEmailRequest,
+  type ChangePasswordRequest,
   ConsentSchema,
   ConsentStatusSchema,
   type CreateReportRequest,
@@ -22,9 +24,9 @@ import {
   type UpdateProfileRequest,
   AntiCheatSessionSecretResponseSchema,
   LivekitTokenResponseSchema,
-} from "@aurafarming/shared";
+} from '@aurafarming/shared';
 
-import { getApiUrl } from "./env";
+import { getApiUrl } from './env';
 
 /** `{ success: true }` é um retorno inline dos controllers Nest, não um DTO de `shared`. */
 const SuccessSchema = z.object({ success: z.literal(true) });
@@ -51,14 +53,14 @@ export class ApiError extends Error {
     message?: string,
   ) {
     super(message ?? `Erro de API (status ${status})`);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
 type ZodParseable<T> = { parse: (value: unknown) => T };
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Anexa `Authorization: Bearer` com o access token em memória. Default: true. */
   auth?: boolean;
@@ -72,11 +74,11 @@ async function request<T>(
   options: RequestOptions = {},
   isRetry = false,
 ): Promise<T> {
-  const { method = "GET", body, auth = true, credentials = "omit" } = options;
+  const { method = 'GET', body, auth = true, credentials = 'omit' } = options;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
+    headers['Content-Type'] = 'application/json';
   }
   if (auth && accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -108,7 +110,50 @@ async function request<T>(
   try {
     return schema.parse(raw);
   } catch {
-    throw new ApiError(response.status, raw, "Resposta da API não bate com o contrato esperado");
+    throw new ApiError(response.status, raw, 'Resposta da API não bate com o contrato esperado');
+  }
+}
+
+/**
+ * Variante multipart de `request()` — não dá para reaproveitar o helper
+ * genérico porque ele sempre serializa `body` como JSON. Nunca seta
+ * Content-Type manualmente: o browser define o boundary do multipart sozinho
+ * a partir da instância de FormData.
+ */
+async function requestMultipart<T>(
+  path: string,
+  schema: ZodParseable<T>,
+  formData: FormData,
+  isRetry = false,
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  const response = await fetch(`${getApiUrl()}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (response.status === 401 && !isRetry && refreshHandler) {
+    const newToken = await refreshHandler();
+    if (newToken) {
+      return requestMultipart(path, schema, formData, true);
+    }
+  }
+
+  const raw = response.status === 204 ? undefined : await response.json().catch(() => undefined);
+
+  if (!response.ok) {
+    throw new ApiError(response.status, raw);
+  }
+
+  try {
+    return schema.parse(raw);
+  } catch {
+    throw new ApiError(response.status, raw, 'Resposta da API não bate com o contrato esperado');
   }
 }
 
@@ -123,30 +168,61 @@ function toQueryString(query: Record<string, string | number | undefined>): stri
 }
 
 export const authApi = {
-  register: (body: RegisterRequest) => request("/auth/register", UserSchema, { method: "POST", body, auth: false }),
+  register: (body: RegisterRequest) =>
+    request('/auth/register', UserSchema, { method: 'POST', body, auth: false }),
   login: (body: LoginRequest) =>
-    request("/auth/login", AuthResponseSchema, { method: "POST", body, auth: false, credentials: "include" }),
-  refresh: () => request("/auth/refresh", AuthResponseSchema, { method: "POST", auth: false, credentials: "include" }),
-  logout: () => request("/auth/logout", SuccessSchema, { method: "POST", credentials: "include" }),
-  me: () => request("/auth/me", UserSchema),
+    request('/auth/login', AuthResponseSchema, {
+      method: 'POST',
+      body,
+      auth: false,
+      credentials: 'include',
+    }),
+  refresh: () =>
+    request('/auth/refresh', AuthResponseSchema, {
+      method: 'POST',
+      auth: false,
+      credentials: 'include',
+    }),
+  logout: () => request('/auth/logout', SuccessSchema, { method: 'POST', credentials: 'include' }),
+  me: () => request('/auth/me', UserSchema),
 };
 
 export const usersApi = {
-  getProfile: () => request("/users/me/profile", ProfileSchema),
+  getProfile: () => request('/users/me/profile', ProfileSchema),
   updateProfile: (body: UpdateProfileRequest) =>
-    request("/users/me/profile", ProfileSchema, { method: "PATCH", body }),
-  exportData: () => request("/users/me/export", UserDataExportSchema),
-  deleteAccount: () => request("/users/me", SuccessSchema, { method: "DELETE" }),
-  grantConsent: (body: GrantConsentRequest) => request("/users/me/consents", ConsentSchema, { method: "POST", body }),
-  listConsents: () => request("/users/me/consents", z.array(ConsentSchema)),
-  consentStatus: () => request("/users/me/consents/status", z.array(ConsentStatusSchema)),
+    request('/users/me/profile', ProfileSchema, { method: 'PATCH', body }),
+  exportData: () => request('/users/me/export', UserDataExportSchema),
+  deleteAccount: () => request('/users/me', SuccessSchema, { method: 'DELETE' }),
+  grantConsent: (body: GrantConsentRequest) =>
+    request('/users/me/consents', ConsentSchema, { method: 'POST', body }),
+  listConsents: () => request('/users/me/consents', z.array(ConsentSchema)),
+  consentStatus: () => request('/users/me/consents/status', z.array(ConsentStatusSchema)),
+  changePassword: (body: ChangePasswordRequest) =>
+    request('/users/me/password', AuthResponseSchema, {
+      method: 'PATCH',
+      body,
+      credentials: 'include',
+    }),
+  changeEmail: (body: ChangeEmailRequest) =>
+    request('/users/me/email', AuthResponseSchema, {
+      method: 'PATCH',
+      body,
+      credentials: 'include',
+    }),
+  uploadAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return requestMultipart('/users/me/avatar', ProfileSchema, formData);
+  },
 };
 
 export const matchesApi = {
   getLivekitToken: (matchId: string) =>
-    request(`/matches/${matchId}/token`, LivekitTokenResponseSchema, { method: "POST" }),
+    request(`/matches/${matchId}/token`, LivekitTokenResponseSchema, { method: 'POST' }),
   getAntiCheatSecret: (matchId: string) =>
-    request(`/matches/${matchId}/anti-cheat-secret`, AntiCheatSessionSecretResponseSchema, { method: "POST" }),
+    request(`/matches/${matchId}/anti-cheat-secret`, AntiCheatSessionSecretResponseSchema, {
+      method: 'POST',
+    }),
   getScoreExplanation: (matchId: string) =>
     request(`/matches/${matchId}/score-explanation`, MatchScoreExplanationSchema),
 };
@@ -154,11 +230,12 @@ export const matchesApi = {
 export const rankingApi = {
   list: (query: RankingListQuery) =>
     request(`/ranking?${toQueryString(query)}`, RankingListResponseSchema),
-  me: () => request("/ranking/me", RankingMeResponseSchema),
+  me: () => request('/ranking/me', RankingMeResponseSchema),
 };
 
 export const reportsApi = {
-  create: (body: CreateReportRequest) => request("/reports", ReportSchema, { method: "POST", body }),
+  create: (body: CreateReportRequest) =>
+    request('/reports', ReportSchema, { method: 'POST', body }),
 };
 
 export const moderationApi = {
@@ -169,5 +246,5 @@ export const moderationApi = {
     ),
   getReport: (id: string) => request(`/moderation/reports/${id}`, ReportDetailSchema),
   resolveReport: (id: string, body: ModerationActionRequest) =>
-    request(`/moderation/reports/${id}/action`, ReportSchema, { method: "POST", body }),
+    request(`/moderation/reports/${id}/action`, ReportSchema, { method: 'POST', body }),
 };

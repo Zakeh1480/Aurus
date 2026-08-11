@@ -9,6 +9,8 @@ import {
   AURA_METRIC_KEYS,
   AURA_SCORE_VERSION,
   AURA_SCORE_WEIGHTS,
+  AVATAR_ALLOWED_MIME_TYPES,
+  AVATAR_MAX_FILE_SIZE_BYTES,
   MATCH_DURATION_SECONDS,
 } from '../src/constants.js';
 
@@ -66,5 +68,20 @@ describe('ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH', () => {
 describe('MATCH_DURATION_SECONDS', () => {
   it('é positivo', () => {
     expect(MATCH_DURATION_SECONDS).toBeGreaterThan(0);
+  });
+});
+
+describe('AVATAR_MAX_FILE_SIZE_BYTES', () => {
+  it('é positivo', () => {
+    expect(AVATAR_MAX_FILE_SIZE_BYTES).toBeGreaterThan(0);
+  });
+});
+
+describe('AVATAR_ALLOWED_MIME_TYPES', () => {
+  it('não é vazio e só contém tipos image/*', () => {
+    expect(AVATAR_ALLOWED_MIME_TYPES.length).toBeGreaterThan(0);
+    for (const mimeType of AVATAR_ALLOWED_MIME_TYPES) {
+      expect(mimeType.startsWith('image/')).toBe(true);
+    }
   });
 });

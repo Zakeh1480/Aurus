@@ -1,17 +1,22 @@
-import type { LoginRequest, RegisterRequest, User, AuthTokens } from "@aurafarming/shared";
-import { ConflictException, Injectable, type OnModuleInit, UnauthorizedException } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { Prisma } from "@prisma/client";
-import * as argon2 from "argon2";
+import type { LoginRequest, RegisterRequest, User, AuthTokens } from '@aurafarming/shared';
+import {
+  ConflictException,
+  Injectable,
+  type OnModuleInit,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
+import * as argon2 from 'argon2';
 
-import { activeBanWhere } from "../moderation/ban.util";
-import { PrismaService } from "../prisma/prisma.service";
-import { getAccessTtlSeconds, getRefreshTtlSeconds } from "./auth.constants";
-import type { JwtPayload } from "./jwt-payload.type";
-import { toPublicUser } from "./mappers/to-public-user.mapper";
-import { generateRefreshToken, hashToken } from "./token.util";
+import { activeBanWhere } from '../moderation/ban.util';
+import { PrismaService } from '../prisma/prisma.service';
+import { getAccessTtlSeconds, getRefreshTtlSeconds } from './auth.constants';
+import type { JwtPayload } from './jwt-payload.type';
+import { toPublicUser } from './mappers/to-public-user.mapper';
+import { generateRefreshToken, hashToken } from './token.util';
 
-const DUMMY_PASSWORD = "dummy-password-for-timing-safety-padding";
+const DUMMY_PASSWORD = 'dummy-password-for-timing-safety-padding';
 
 export interface AuthSession {
   user: User;
@@ -46,15 +51,15 @@ export class AuthService implements OnModuleInit {
       });
       return toPublicUser(user);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        throw new ConflictException("E-mail já cadastrado.");
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('E-mail já cadastrado.');
       }
       throw error;
     }
   }
 
   async login(input: LoginRequest): Promise<AuthSession> {
-    const invalidCredentials = new UnauthorizedException("Credenciais inválidas.");
+    const invalidCredentials = new UnauthorizedException('Credenciais inválidas.');
     const user = await this.prisma.user.findUnique({
       where: { email: input.email },
       include: { bansReceived: { where: activeBanWhere(), take: 1 } },
@@ -79,7 +84,7 @@ export class AuthService implements OnModuleInit {
   }
 
   async refresh(rawRefreshToken: string | undefined): Promise<AuthSession> {
-    const invalid = new UnauthorizedException("Refresh token inválido.");
+    const invalid = new UnauthorizedException('Refresh token inválido.');
     if (!rawRefreshToken) {
       throw invalid;
     }
@@ -144,7 +149,23 @@ export class AuthService implements OnModuleInit {
     await this.revokeAllUserTokens(userId);
   }
 
-  private async issueTokenPair(userId: string): Promise<{ tokens: AuthTokens; refreshToken: string }> {
+  /**
+   * Usado por UsersService (Prompt 29) depois de trocar senha/e-mail: troca
+   * de credencial é sinal de que outras sessões devem reautenticar, mas a
+   * sessão que acabou de fazer a troca precisa continuar logada — por isso
+   * revoga tudo e já emite um par novo, em vez de só revogar (que deixaria
+   * o próprio usuário deslogado ao trocar a própria senha).
+   */
+  async rotateSessionAfterAccountChange(
+    userId: string,
+  ): Promise<{ tokens: AuthTokens; refreshToken: string }> {
+    await this.revokeAllUserTokens(userId);
+    return this.issueTokenPair(userId);
+  }
+
+  private async issueTokenPair(
+    userId: string,
+  ): Promise<{ tokens: AuthTokens; refreshToken: string }> {
     const expiresIn = getAccessTtlSeconds();
     const payload: JwtPayload = { sub: userId };
     const accessToken = this.jwtService.sign(payload, { expiresIn });

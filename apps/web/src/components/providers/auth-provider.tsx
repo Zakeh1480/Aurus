@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import type { AuthResponse, LoginRequest, RegisterRequest, User } from "@aurafarming/shared";
+import * as React from 'react';
+import type { AuthResponse, LoginRequest, RegisterRequest, User } from '@aurafarming/shared';
 
-import { authApi, setAccessToken, setRefreshHandler } from "@/lib/api-client";
+import { authApi, setAccessToken, setRefreshHandler } from '@/lib/api-client';
 
-export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 type AuthContextValue = {
   user: User | null;
@@ -14,6 +14,8 @@ type AuthContextValue = {
   login: (body: LoginRequest) => Promise<void>;
   register: (body: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
+  /** Aplica uma sessão já emitida pela API (ex.: troca de senha/e-mail em `/configuracoes`) sem passar por login/refresh. */
+  applySession: (response: AuthResponse) => void;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
@@ -25,7 +27,7 @@ function msUntilNextRefresh(expiresInSeconds: number): number {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
-  const [status, setStatus] = React.useState<AuthStatus>("loading");
+  const [status, setStatus] = React.useState<AuthStatus>('loading');
   const [token, setToken] = React.useState<string | null>(null);
 
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccessToken(response.tokens.accessToken);
       setToken(response.tokens.accessToken);
       setUser(response.user);
-      setStatus("authenticated");
+      setStatus('authenticated');
       scheduleRefresh(response.tokens.expiresIn);
     },
     [scheduleRefresh],
@@ -79,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccessToken(null);
         setToken(null);
         setUser(null);
-        setStatus("unauthenticated");
+        setStatus('unauthenticated');
         return null;
       })
       .finally(() => {
@@ -130,12 +132,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(null);
     setToken(null);
     setUser(null);
-    setStatus("unauthenticated");
+    setStatus('unauthenticated');
   }, [clearScheduledRefresh]);
 
   const value = React.useMemo<AuthContextValue>(
-    () => ({ user, status, accessToken: token, login, register, logout }),
-    [user, status, token, login, register, logout],
+    () => ({
+      user,
+      status,
+      accessToken: token,
+      login,
+      register,
+      logout,
+      applySession: applyAuthResponse,
+    }),
+    [user, status, token, login, register, logout, applyAuthResponse],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -144,7 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth(): AuthContextValue {
   const ctx = React.useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuth deve ser usado dentro de <AuthProvider>");
+    throw new Error('useAuth deve ser usado dentro de <AuthProvider>');
   }
   return ctx;
 }

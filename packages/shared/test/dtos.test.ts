@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH } from '../src/constants.js';
+import { ChangeEmailRequestSchema, ChangePasswordRequestSchema } from '../src/dtos/account.dto.js';
 import {
   AntiCheatIncidentSchema,
   LivenessFlagCountsSchema,
@@ -204,6 +205,61 @@ describe('LoginRequestSchema', () => {
     const result = LoginRequestSchema.safeParse({
       email: 'not-an-email',
       password: 'qualquer-senha',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('ChangePasswordRequestSchema', () => {
+  it('aceita uma troca de senha válida', () => {
+    const result = ChangePasswordRequestSchema.safeParse({
+      currentPassword: 'senha-atual',
+      newPassword: 'senha-nova-forte-123',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita currentPassword vazia', () => {
+    const result = ChangePasswordRequestSchema.safeParse({
+      currentPassword: '',
+      newPassword: 'senha-nova-forte-123',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita newPassword menor que 8 caracteres — mesmo limite de RegisterRequestSchema.password', () => {
+    const result = ChangePasswordRequestSchema.safeParse({
+      currentPassword: 'senha-atual',
+      newPassword: 'short',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('ChangeEmailRequestSchema', () => {
+  it('aceita uma troca de e-mail válida, normalizando para lowercase', () => {
+    const result = ChangeEmailRequestSchema.safeParse({
+      currentPassword: 'senha-atual',
+      newEmail: 'Novo@Example.com',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.newEmail).toBe('novo@example.com');
+    }
+  });
+
+  it('rejeita currentPassword vazia', () => {
+    const result = ChangeEmailRequestSchema.safeParse({
+      currentPassword: '',
+      newEmail: 'novo@example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita newEmail inválido', () => {
+    const result = ChangeEmailRequestSchema.safeParse({
+      currentPassword: 'senha-atual',
+      newEmail: 'not-an-email',
     });
     expect(result.success).toBe(false);
   });

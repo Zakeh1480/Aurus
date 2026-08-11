@@ -51,3 +51,11 @@ export const ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH = 400_000;
  * lados importam daqui para não divergir.
  */
 export const MATCH_DURATION_SECONDS = 60;
+
+/**
+ * Upload de avatar (Prompt 29) — client pré-valida com os mesmos limites que
+ * o servidor aplica (POST /users/me/avatar), evitando um round-trip
+ * desperdiçado para um arquivo obviamente inválido.
+ */
+export const AVATAR_MAX_FILE_SIZE_BYTES = 5_000_000;
+export const AVATAR_ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
