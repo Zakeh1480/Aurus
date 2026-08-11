@@ -1,29 +1,52 @@
-import Link from "next/link";
-import { AURA_METRIC_KEYS, AURA_SCORE_WEIGHTS, type AuraScore, type MatchResultPayload } from "@aurafarming/shared";
+import Link from 'next/link';
+import {
+  AURA_METRIC_KEYS,
+  AURA_SCORE_WEIGHTS,
+  type AuraScore,
+  type MatchResultPayload,
+} from '@aurafarming/shared';
 
-import { ReportDialog } from "@/components/moderation/report-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { AURA_METRIC_LABELS } from "@/lib/aura-metric-labels";
-import { cn } from "@/lib/utils";
+import { ReportDialog } from '@/components/moderation/report-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { AURA_METRIC_LABELS } from '@/lib/aura-metric-labels';
+import { cn } from '@/lib/utils';
 
-function PlayerBreakdown({ label, score, ratingDelta }: { label: string; score: AuraScore; ratingDelta: number }) {
+function PlayerBreakdown({
+  label,
+  score,
+  ratingDelta,
+}: {
+  label: string;
+  score: AuraScore;
+  ratingDelta: number;
+}) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">{label}</span>
-        <span className={cn("font-mono text-xs", ratingDelta >= 0 ? "text-success" : "text-destructive")}>
-          {ratingDelta >= 0 ? "+" : ""}
+        <span
+          className={cn(
+            'font-mono text-xs',
+            ratingDelta >= 0 ? 'text-success' : 'text-destructive',
+          )}
+        >
+          {ratingDelta >= 0 ? '+' : ''}
           {ratingDelta}
         </span>
       </div>
-      <span className="text-center font-mono text-2xl tabular-nums">{Math.round(score.overall * 100)}</span>
+      <span className="text-center font-mono text-2xl tabular-nums">
+        {Math.round(score.overall * 100)}
+      </span>
       <div className="flex flex-col gap-1.5">
         {AURA_METRIC_KEYS.map((key) => (
           <div key={key} className="flex items-center gap-2">
-            <span className="w-24 shrink-0 text-xs text-muted-foreground">{AURA_METRIC_LABELS[key]}</span>
+            <span className="w-24 shrink-0 text-xs text-muted-foreground">
+              {AURA_METRIC_LABELS[key]}
+            </span>
             <Progress value={score.breakdown[key]} />
             {/* Peso fixo da métrica (fairness, Prompt 13) — contribuição = valor bruto × peso. */}
             <span className="w-10 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
@@ -39,15 +62,21 @@ function PlayerBreakdown({ label, score, ratingDelta }: { label: string; score: 
 type ResultScreenProps = {
   result: MatchResultPayload;
   selfUserId: string;
+  reason: 'completed' | 'forfeited';
 };
 
-export function ResultScreen({ result, selfUserId }: ResultScreenProps) {
+export function ResultScreen({ result, selfUserId, reason }: ResultScreenProps) {
   const self = result.player1.userId === selfUserId ? result.player1 : result.player2;
   const opponent = result.player1.userId === selfUserId ? result.player2 : result.player1;
 
   const outcome =
-    result.winnerId === null ? "Empate" : result.winnerId === selfUserId ? "Vitória!" : "Derrota";
-  const badgeVariant = result.winnerId === null ? "secondary" : result.winnerId === selfUserId ? "success" : "destructive";
+    result.winnerId === null ? 'Empate' : result.winnerId === selfUserId ? 'Vitória!' : 'Derrota';
+  const badgeVariant =
+    result.winnerId === null
+      ? 'secondary'
+      : result.winnerId === selfUserId
+        ? 'success'
+        : 'destructive';
 
   return (
     <Card>
@@ -56,9 +85,22 @@ export function ResultScreen({ result, selfUserId }: ResultScreenProps) {
         <CardTitle className="text-2xl">Resultado da partida</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {reason === 'forfeited' ? (
+          <Alert>
+            <AlertDescription>
+              {result.winnerId === selfUserId
+                ? 'Seu adversário desistiu da partida.'
+                : 'Resultado decidido por desistência.'}
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="grid grid-cols-2 gap-4">
           <PlayerBreakdown label="Você" score={self.score} ratingDelta={self.ratingDelta} />
-          <PlayerBreakdown label="Adversário" score={opponent.score} ratingDelta={opponent.ratingDelta} />
+          <PlayerBreakdown
+            label="Adversário"
+            score={opponent.score}
+            ratingDelta={opponent.ratingDelta}
+          />
         </div>
         <p className="text-center text-xs text-muted-foreground">
           Posição no ranking não faz parte deste resultado.

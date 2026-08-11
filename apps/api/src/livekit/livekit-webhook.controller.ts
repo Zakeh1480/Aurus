@@ -40,14 +40,14 @@ export class LivekitWebhookController {
       throw new UnauthorizedException('Assinatura de webhook inválida.');
     }
 
-    if (event.event === 'participant_left' && event.room?.name) {
-      // finalizeMatch decide entre encerrar com resultado (Prompt 7) ou
-      // descartar (trust score baixo/sem amostras) — encapsula o antigo
-      // fallback direto para MatchmakingService.endActiveMatch.
-      await this.scoringService.finalizeMatch(event.room.name);
+    if (event.event === 'participant_left' && event.room?.name && event.participant?.identity) {
+      // forfeitMatch é idempotente (status !== 'active' vira no-op) — cobre
+      // tanto uma desconexão real no meio da partida (derrota automática de
+      // quem saiu) quanto o participant_left tardio que o próprio deleteRoom
+      // de um encerramento normal (finalizeMatch, duração esgotada) dispara
+      // pros dois lados saindo da room.
+      await this.scoringService.forfeitMatch(event.room.name, event.participant.identity);
       await this.livekit.deleteRoom(event.room.name);
-      // A partida já terminou por esse caminho — evita o timer de duração
-      // (MatchDurationSchedulerService) disparar depois, à toa.
       this.matchDurationScheduler.cancel(event.room.name);
     }
 

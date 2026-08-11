@@ -1,8 +1,8 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH } from "../constants.js";
-import { AuraFeaturesSchema } from "../dtos/aura-features.dto.js";
-import { MatchResultSchema } from "../dtos/match-result.dto.js";
+import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH } from '../constants.js';
+import { AuraFeaturesSchema } from '../dtos/aura-features.dto.js';
+import { MatchResultSchema } from '../dtos/match-result.dto.js';
 
 /** server → ambos jogadores */
 export const MatchStartPayloadSchema = z.object({
@@ -52,7 +52,7 @@ export const MatchVerifyChallengePayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
   challengeId: z.uuid(),
-  challengeType: z.enum(["snapshot"]),
+  challengeType: z.enum(['snapshot']),
   nonce: z.string().min(16),
   issuedAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
@@ -81,10 +81,17 @@ export type MatchVerifyResponsePayload = z.infer<typeof MatchVerifyResponsePaylo
 export const MatchEndPayloadSchema = z.object({
   matchId: z.uuid(),
   endedAt: z.iso.datetime(),
-  reason: z.enum(["completed", "disconnected", "cancelled"]),
+  reason: z.enum(['completed', 'disconnected', 'cancelled', 'forfeited']),
 });
 export type MatchEndPayload = z.infer<typeof MatchEndPayloadSchema>;
 
 /** server → ambos jogadores — reaproveita MatchResultSchema, não redeclara. */
 export const MatchResultPayloadSchema = MatchResultSchema;
 export type MatchResultPayload = z.infer<typeof MatchResultPayloadSchema>;
+
+/** client → server. Desistência voluntária de uma partida ativa. */
+export const MatchForfeitPayloadSchema = z.object({
+  matchId: z.uuid(),
+  userId: z.uuid(),
+});
+export type MatchForfeitPayload = z.infer<typeof MatchForfeitPayloadSchema>;

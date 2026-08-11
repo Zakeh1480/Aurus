@@ -16,12 +16,12 @@ function fakeRequest(rawBody?: Buffer): RawBodyRequest<Request> {
 describe('LivekitWebhookController', () => {
   let controller: LivekitWebhookController;
   let livekit: { verifyWebhook: ReturnType<typeof vi.fn>; deleteRoom: ReturnType<typeof vi.fn> };
-  let scoringService: { finalizeMatch: ReturnType<typeof vi.fn> };
+  let scoringService: { forfeitMatch: ReturnType<typeof vi.fn> };
   let matchDurationScheduler: { cancel: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     livekit = { verifyWebhook: vi.fn(), deleteRoom: vi.fn().mockResolvedValue(undefined) };
-    scoringService = { finalizeMatch: vi.fn().mockResolvedValue(undefined) };
+    scoringService = { forfeitMatch: vi.fn().mockResolvedValue(undefined) };
     matchDurationScheduler = { cancel: vi.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -55,10 +55,28 @@ describe('LivekitWebhookController', () => {
     await expect(
       controller.handleWebhook(fakeRequest(Buffer.from('{}')), 'assinatura-invalida'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
-    expect(scoringService.finalizeMatch).not.toHaveBeenCalled();
+    expect(scoringService.forfeitMatch).not.toHaveBeenCalled();
   });
 
-  it('participant_left válido finaliza a partida via ScoringService e apaga a room', async () => {
+  it('participant_left válido registra forfeit de quem saiu via ScoringService e apaga a room', async () => {
+    livekit.verifyWebhook.mockResolvedValue({
+      event: 'participant_left',
+      room: { name: 'match-123' },
+      participant: { identity: 'user-456' },
+    } as WebhookEvent);
+
+    const result = await controller.handleWebhook(
+      fakeRequest(Buffer.from('{}')),
+      'assinatura-valida',
+    );
+
+    expect(scoringService.forfeitMatch).toHaveBeenCalledWith('match-123', 'user-456');
+    expect(livekit.deleteRoom).toHaveBeenCalledWith('match-123');
+    expect(matchDurationScheduler.cancel).toHaveBeenCalledWith('match-123');
+    expect(result).toEqual({ received: true });
+  });
+
+  it('participant_left sem identity do participante não chama forfeit nem apaga a room', async () => {
     livekit.verifyWebhook.mockResolvedValue({
       event: 'participant_left',
       room: { name: 'match-123' },
@@ -69,9 +87,9 @@ describe('LivekitWebhookController', () => {
       'assinatura-valida',
     );
 
-    expect(scoringService.finalizeMatch).toHaveBeenCalledWith('match-123');
-    expect(livekit.deleteRoom).toHaveBeenCalledWith('match-123');
-    expect(matchDurationScheduler.cancel).toHaveBeenCalledWith('match-123');
+    expect(scoringService.forfeitMatch).not.toHaveBeenCalled();
+    expect(livekit.deleteRoom).not.toHaveBeenCalled();
+    expect(matchDurationScheduler.cancel).not.toHaveBeenCalled();
     expect(result).toEqual({ received: true });
   });
 
@@ -86,7 +104,7 @@ describe('LivekitWebhookController', () => {
       'assinatura-valida',
     );
 
-    expect(scoringService.finalizeMatch).not.toHaveBeenCalled();
+    expect(scoringService.forfeitMatch).not.toHaveBeenCalled();
     expect(livekit.deleteRoom).not.toHaveBeenCalled();
     expect(matchDurationScheduler.cancel).not.toHaveBeenCalled();
     expect(result).toEqual({ received: true });

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { type WsEventName, WsEventSchemas } from "../src/events/event-map.js";
+import { type WsEventName, WsEventSchemas } from '../src/events/event-map.js';
 
-const UUID_A = "123e4567-e89b-12d3-a456-426614174000";
-const UUID_B = "223e4567-e89b-12d3-a456-426614174001";
+const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
+const UUID_B = '223e4567-e89b-12d3-a456-426614174001';
 const NOW = new Date().toISOString();
 
 const VALID_AURA_SCORE = {
@@ -15,29 +15,29 @@ const VALID_AURA_SCORE = {
     presence: 0.8,
     movement: 0.8,
   },
-  version: "aura-score-v1" as const,
+  version: 'aura-score-v1' as const,
   computedAt: NOW,
 };
 
 const VALID_FIXTURES: Record<WsEventName, unknown> = {
-  "queue:join": { userId: UUID_A },
-  "queue:leave": { userId: UUID_A },
-  "queue:matched": {
+  'queue:join': { userId: UUID_A },
+  'queue:leave': { userId: UUID_A },
+  'queue:matched': {
     matchId: UUID_A,
     opponentId: UUID_B,
-    queueStatus: "matched",
+    queueStatus: 'matched',
     matchedAt: NOW,
   },
-  "queue:accept": {
+  'queue:accept': {
     matchId: UUID_A,
   },
-  "match:start": {
+  'match:start': {
     matchId: UUID_A,
     player1Id: UUID_A,
     player2Id: UUID_B,
     startedAt: NOW,
   },
-  "match:features": {
+  'match:features': {
     matchId: UUID_A,
     userId: UUID_A,
     features: {
@@ -49,10 +49,10 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
       sequence: 0,
       capturedAt: NOW,
     },
-    nonce: "a".repeat(16),
-    signature: "b".repeat(32),
+    nonce: 'a'.repeat(16),
+    signature: 'b'.repeat(32),
   },
-  "match:score-tick": {
+  'match:score-tick': {
     matchId: UUID_A,
     tickAt: NOW,
     scores: [
@@ -60,22 +60,22 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
       { userId: UUID_B, liveScore: 0.7 },
     ],
   },
-  "match:verify-challenge": {
+  'match:verify-challenge': {
     matchId: UUID_A,
     userId: UUID_A,
     challengeId: UUID_B,
-    challengeType: "snapshot",
-    nonce: "c".repeat(16),
+    challengeType: 'snapshot',
+    nonce: 'c'.repeat(16),
     issuedAt: NOW,
     expiresAt: NOW,
   },
-  "match:verify-response": {
+  'match:verify-response': {
     matchId: UUID_A,
     userId: UUID_A,
     challengeId: UUID_B,
-    nonce: "c".repeat(16),
+    nonce: 'c'.repeat(16),
     capturedAt: NOW,
-    keyframeBase64: "ZmFrZS1rZXlmcmFtZQ==",
+    keyframeBase64: 'ZmFrZS1rZXlmcmFtZQ==',
     claimedFeatures: {
       posture: 0.5,
       eyeContact: 0.5,
@@ -85,14 +85,14 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
       sequence: 0,
       capturedAt: NOW,
     },
-    signature: "d".repeat(32),
+    signature: 'd'.repeat(32),
   },
-  "match:end": {
+  'match:end': {
     matchId: UUID_A,
     endedAt: NOW,
-    reason: "completed",
+    reason: 'completed',
   },
-  "match:result": {
+  'match:result': {
     id: UUID_A,
     matchId: UUID_A,
     player1: { userId: UUID_A, score: VALID_AURA_SCORE, ratingDelta: 12 },
@@ -100,55 +100,76 @@ const VALID_FIXTURES: Record<WsEventName, unknown> = {
     winnerId: UUID_A,
     createdAt: NOW,
   },
+  'match:forfeit': {
+    matchId: UUID_A,
+    userId: UUID_A,
+  },
 };
 
-describe("WsEventSchemas", () => {
-  it.each(Object.entries(WsEventSchemas))("%s aceita seu payload válido", (eventName, schema) => {
+describe('WsEventSchemas', () => {
+  it.each(Object.entries(WsEventSchemas))('%s aceita seu payload válido', (eventName, schema) => {
     const fixture = VALID_FIXTURES[eventName as WsEventName];
     expect(schema.safeParse(fixture).success).toBe(true);
   });
 
-  it("cobre exatamente os 11 eventos do contrato", () => {
+  it('cobre exatamente os 12 eventos do contrato', () => {
     expect(Object.keys(WsEventSchemas).sort()).toEqual(
       [
-        "queue:join",
-        "queue:leave",
-        "queue:matched",
-        "queue:accept",
-        "match:start",
-        "match:features",
-        "match:score-tick",
-        "match:verify-challenge",
-        "match:verify-response",
-        "match:end",
-        "match:result",
+        'queue:join',
+        'queue:leave',
+        'queue:matched',
+        'queue:accept',
+        'match:start',
+        'match:features',
+        'match:score-tick',
+        'match:verify-challenge',
+        'match:verify-response',
+        'match:end',
+        'match:result',
+        'match:forfeit',
       ].sort(),
     );
   });
 
-  it("match:features rejeita payload sem nonce", () => {
-    const withoutNonce = { ...(VALID_FIXTURES["match:features"] as Record<string, unknown>) };
-    delete withoutNonce["nonce"];
-    expect(WsEventSchemas["match:features"].safeParse(withoutNonce).success).toBe(false);
-  });
-
-  it("match:features rejeita payload sem signature", () => {
-    const withoutSignature = { ...(VALID_FIXTURES["match:features"] as Record<string, unknown>) };
-    delete withoutSignature["signature"];
-    expect(WsEventSchemas["match:features"].safeParse(withoutSignature).success).toBe(false);
-  });
-
-  it("match:verify-challenge rejeita challengeType fora do enum", () => {
-    const invalid = {
-      ...(VALID_FIXTURES["match:verify-challenge"] as Record<string, unknown>),
-      challengeType: "look-at-camera",
+  it('match:end aceita reason forfeited', () => {
+    const forfeited = {
+      ...(VALID_FIXTURES['match:end'] as Record<string, unknown>),
+      reason: 'forfeited',
     };
-    expect(WsEventSchemas["match:verify-challenge"].safeParse(invalid).success).toBe(false);
+    expect(WsEventSchemas['match:end'].safeParse(forfeited).success).toBe(true);
   });
 
-  it("match:verify-response rejeita payload sem nonce", () => {
-    const withoutNonce = { ...(VALID_FIXTURES["match:verify-response"] as Record<string, unknown>) };
-    delete withoutNonce["nonce"];
-    expect(WsEventSchemas["match:verify-response"].safeParse(withoutNonce).success).toBe(false);
+  it('match:forfeit rejeita payload sem matchId', () => {
+    const withoutMatchId = { ...(VALID_FIXTURES['match:forfeit'] as Record<string, unknown>) };
+    delete withoutMatchId['matchId'];
+    expect(WsEventSchemas['match:forfeit'].safeParse(withoutMatchId).success).toBe(false);
+  });
+
+  it('match:features rejeita payload sem nonce', () => {
+    const withoutNonce = { ...(VALID_FIXTURES['match:features'] as Record<string, unknown>) };
+    delete withoutNonce['nonce'];
+    expect(WsEventSchemas['match:features'].safeParse(withoutNonce).success).toBe(false);
+  });
+
+  it('match:features rejeita payload sem signature', () => {
+    const withoutSignature = { ...(VALID_FIXTURES['match:features'] as Record<string, unknown>) };
+    delete withoutSignature['signature'];
+    expect(WsEventSchemas['match:features'].safeParse(withoutSignature).success).toBe(false);
+  });
+
+  it('match:verify-challenge rejeita challengeType fora do enum', () => {
+    const invalid = {
+      ...(VALID_FIXTURES['match:verify-challenge'] as Record<string, unknown>),
+      challengeType: 'look-at-camera',
+    };
+    expect(WsEventSchemas['match:verify-challenge'].safeParse(invalid).success).toBe(false);
+  });
+
+  it('match:verify-response rejeita payload sem nonce', () => {
+    const withoutNonce = {
+      ...(VALID_FIXTURES['match:verify-response'] as Record<string, unknown>),
+    };
+    delete withoutNonce['nonce'];
+    expect(WsEventSchemas['match:verify-response'].safeParse(withoutNonce).success).toBe(false);
   });
 });
