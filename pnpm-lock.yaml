@@ -77,6 +77,9 @@ importers:
       livekit-server-sdk:
         specifier: ^2.17.0
         version: 2.17.0
+      multer:
+        specifier: 2.2.0
+        version: 2.2.0
       passport:
         specifier: 0.7.0
         version: 0.7.0
