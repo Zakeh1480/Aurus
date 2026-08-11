@@ -5,10 +5,45 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import type { Redis } from 'ioredis';
 import type { Server, ServerOptions, Socket } from 'socket.io';
 
+import { WsRateLimiterService } from '../common/ws-rate-limiter.service';
 import { getCorsOptions } from '../common/cors.util';
 import { RedisService } from '../redis/redis.service';
 import { MatchmakingService, userRoom } from './matchmaking.service';
 import { WsAuthService } from './ws-auth.service';
+
+/** Janela fixa de 60s — mesmo padrão dos limites de queue:* em MatchmakingGateway. */
+const HANDSHAKE_RATE_LIMIT = 30;
+const HANDSHAKE_RATE_WINDOW_MS = 60_000;
+
+/**
+ * `socket.handshake.address` vem direto de `req.connection.remoteAddress`
+ * (engine.io) — NÃO respeita `X-Forwarded-For` nem o `trust proxy` do
+ * Express, diferente de `req.ip` no REST. Atrás do proxy da Railway, isso
+ * resolveria sempre para o IP do proxy — resultado seria um rate limit
+ * efetivamente global (compartilhado por todo mundo) em vez de por atacante.
+ * Confia em exatamente um hop (mesmo `trust proxy: 1` de main.ts): usa o
+ * primeiro IP de X-Forwarded-For se presente, senão cai no address direto
+ * (caso local/dev, sem proxy).
+ */
+function resolveClientIp(socket: Socket): string {
+  const forwardedFor = socket.handshake.headers?.['x-forwarded-for'];
+  const first = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  const fromHeader = first?.split(',')[0]?.trim();
+  return fromHeader || socket.handshake.address || 'unknown';
+}
+
+/** Fail open: falha do limiter (ex.: Redis fora do ar) nunca deve travar a autenticação inteira. */
+async function allowHandshake(wsRateLimiter: WsRateLimiterService, ip: string): Promise<boolean> {
+  try {
+    return await wsRateLimiter.allow(
+      `ws-handshake:${ip}`,
+      HANDSHAKE_RATE_LIMIT,
+      HANDSHAKE_RATE_WINDOW_MS,
+    );
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Middleware de autenticação do handshake do Socket.IO — extraído como
@@ -26,20 +61,35 @@ import { WsAuthService } from './ws-auth.service';
  * conseguir emitir/desconectar por userId sem guardar a referência do
  * `Socket` — combinado com o adapter Redis registrado em `createIOServer`,
  * a room é visível (e alcançável) a partir de qualquer réplica da API.
+ *
+ * Rate limit por IP antes de tudo (`allowHandshake`): verificar JWT +
+ * reconsultar Postgres tem custo real por tentativa — sem esse corte, um
+ * flood de handshakes (mesmo sem token válido) vira flood de query no banco.
  */
+
 export function createHandshakeAuthMiddleware(
   wsAuthService: WsAuthService,
+  wsRateLimiter: WsRateLimiterService,
 ): (socket: Socket, next: (err?: Error) => void) => void {
   return (socket, next) => {
-    const token = socket.handshake.auth?.['token'] as string | undefined;
-    wsAuthService
-      .authenticate(token)
-      .then((userId) => {
+    void (async () => {
+      const ip = resolveClientIp(socket);
+      const allowed = await allowHandshake(wsRateLimiter, ip);
+      if (!allowed) {
+        next(new Error('Too many connection attempts'));
+        return;
+      }
+
+      const token = socket.handshake.auth?.['token'] as string | undefined;
+      try {
+        const userId = await wsAuthService.authenticate(token);
         socket.data.userId = userId;
         socket.join(userRoom(userId));
         next();
-      })
-      .catch(() => next(new Error('Unauthorized')));
+      } catch {
+        next(new Error('Unauthorized'));
+      }
+    })();
   };
 }
 
@@ -90,7 +140,12 @@ export class MatchmakingIoAdapter extends IoAdapter {
       cors: getCorsOptions(),
     }) as Server;
 
-    server.use(createHandshakeAuthMiddleware(this.app.get(WsAuthService)));
+    server.use(
+      createHandshakeAuthMiddleware(
+        this.app.get(WsAuthService),
+        this.app.get(WsRateLimiterService),
+      ),
+    );
     this.app.get(MatchmakingService).setServer(server);
 
     // `lazyConnect: false`: diferente do RedisService (que adia a conexão

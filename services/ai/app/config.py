@@ -30,6 +30,12 @@ class Settings:
     verify_face_min_area_ratio: float = 0.05
     verify_haar_scale_factor: float = 1.1
     verify_haar_min_neighbors: int = 5
+    # Rate limit por IP (Prompt 28) — default generoso acima do volume
+    # legítimo esperado (apps/api chama /score/aggregate 2x por tick de
+    # score, MATCH_SCORE_TICK_INTERVAL_MS default 5000ms, por partida ativa),
+    # ainda assim um teto real contra flood de segredo vazado/bug em loop.
+    rate_limit_max_requests: int = 1200
+    rate_limit_window_seconds: int = 60
 
 
 @lru_cache
@@ -43,4 +49,6 @@ def get_settings() -> Settings:
             os.getenv("ANTI_CHEAT_BLUR_VARIANCE_LOW_DETAIL_THRESHOLD", "60.0")
         ),
         verify_face_min_area_ratio=float(os.getenv("ANTI_CHEAT_FACE_MIN_AREA_RATIO", "0.05")),
+        rate_limit_max_requests=int(os.getenv("AI_SERVICE_RATE_LIMIT_MAX_REQUESTS", "1200")),
+        rate_limit_window_seconds=int(os.getenv("AI_SERVICE_RATE_LIMIT_WINDOW_SECONDS", "60")),
     )

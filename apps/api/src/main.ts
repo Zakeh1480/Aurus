@@ -2,6 +2,7 @@ import { config } from 'dotenv';
 import { resolve } from 'node:path';
 import 'reflect-metadata';
 import cookieParser from 'cookie-parser';
+import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -29,6 +30,13 @@ async function bootstrap() {
   // API só, sem views HTML — CSP/COEP padrão do Helmet não afetam o cliente
   // Next.js (que roda em outra origem) nem o webhook de rawBody do LiveKit.
   app.use(helmet());
+  // Toda resposta é dinâmica/por-usuário (perfil, tokens, ranking) — não há
+  // nada aqui que deva ser cacheado por proxy/CDN intermediário ou pelo
+  // próprio browser.
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.enableCors(getCorsOptions());
   // Depois do config() acima (env já populado) — ver matchmaking-io.adapter.ts.
   app.useWebSocketAdapter(new MatchmakingIoAdapter(app));
