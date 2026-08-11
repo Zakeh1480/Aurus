@@ -3,26 +3,30 @@ import {
   MatchFeaturesPayloadSchema,
   type MatchVerifyResponsePayload,
   MatchVerifyResponsePayloadSchema,
-} from "@aurafarming/shared";
-import { Logger } from "@nestjs/common";
-import { ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway } from "@nestjs/websockets";
-import type { Socket } from "socket.io";
+} from '@aurafarming/shared';
+import { Logger } from '@nestjs/common';
+import {
+  ConnectedSocket,
+  MessageBody,
+  SubscribeMessage,
+  WebSocketGateway,
+} from '@nestjs/websockets';
+import type { Socket } from 'socket.io';
 
-import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
-import { AiVerifyClientService } from "./ai-verify-client.service";
-import { getAntiCheatConfig } from "./anti-cheat.constants";
-import { FeatureBufferService } from "./feature-buffer.service";
-import { buildFeaturesSigningPayload, buildVerifyResponseSigningPayload, verifyHmac } from "./hmac.util";
-import { KeyframeHistoryService } from "./keyframe-history.service";
-import { NonceService } from "./nonce.service";
-import { SessionSecretService } from "./session-secret.service";
-import { TrustScoreService } from "./trust-score.service";
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { AiVerifyClientService } from './ai-verify-client.service';
+import { getAntiCheatConfig } from './anti-cheat.constants';
+import { FeatureBufferService } from './feature-buffer.service';
+import {
+  buildFeaturesSigningPayload,
+  buildVerifyResponseSigningPayload,
+  verifyHmac,
+} from './hmac.util';
+import { KeyframeHistoryService } from './keyframe-history.service';
+import { NonceService } from './nonce.service';
+import { SessionSecretService } from './session-secret.service';
+import { TrustScoreService } from './trust-score.service';
 
-/**
- * maxHttpBufferSize com headroom explícito acima do default do Socket.IO
- * (1MB) — um keyframe base64 (~300KB, teto em ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH)
- * precisa caber no payload de match:verify-response.
- */
 @WebSocketGateway({ maxHttpBufferSize: 2_000_000 })
 export class AntiCheatGateway {
   private readonly logger = new Logger(AntiCheatGateway.name);
@@ -36,12 +40,7 @@ export class AntiCheatGateway {
     private readonly trustScoreService: TrustScoreService,
   ) {}
 
-  /**
-   * Nunca chama o serviço de IA aqui — só valida assinatura/nonce/janela
-   * temporal e checa continuidade física. É essa ausência de chamada
-   * externa que garante que o caminho normal não tem latência perceptível.
-   */
-  @SubscribeMessage("match:features")
+  @SubscribeMessage('match:features')
   async onFeatures(
     @ConnectedSocket() socket: Socket,
     @MessageBody(new ZodValidationPipe(MatchFeaturesPayloadSchema)) payload: MatchFeaturesPayload,
@@ -57,7 +56,9 @@ export class AntiCheatGateway {
       capturedAt: payload.features.capturedAt,
     });
     const signatureOk = secret !== null && verifyHmac(canonical, secret, payload.signature);
-    const nonceOk = signatureOk && (await this.nonceService.consumeFeatureNonce(payload.matchId, userId, payload.nonce));
+    const nonceOk =
+      signatureOk &&
+      (await this.nonceService.consumeFeatureNonce(payload.matchId, userId, payload.nonce));
     const withinWindow = nonceOk && this.isWithinClockSkew(payload.features.capturedAt);
 
     if (!signatureOk || !nonceOk || !withinWindow) {
@@ -65,14 +66,19 @@ export class AntiCheatGateway {
       return;
     }
 
-    const { violated } = await this.featureBufferService.pushAndCheck(payload.matchId, userId, payload.features);
+    const { violated } = await this.featureBufferService.pushAndCheck(
+      payload.matchId,
+      userId,
+      payload.features,
+    );
     await this.trustScoreService.recordAcceptedPacket(payload.matchId, userId, violated);
   }
 
-  @SubscribeMessage("match:verify-response")
+  @SubscribeMessage('match:verify-response')
   async onVerifyResponse(
     @ConnectedSocket() socket: Socket,
-    @MessageBody(new ZodValidationPipe(MatchVerifyResponsePayloadSchema)) payload: MatchVerifyResponsePayload,
+    @MessageBody(new ZodValidationPipe(MatchVerifyResponsePayloadSchema))
+    payload: MatchVerifyResponsePayload,
   ): Promise<void> {
     const userId = this.requireUserId(socket, payload.userId);
 
@@ -116,17 +122,20 @@ export class AntiCheatGateway {
       });
       await this.trustScoreService.recordVerifyResult(payload.matchId, userId, result);
     } catch (error: unknown) {
-      this.logger.error(`Falha ao chamar /verify para match ${payload.matchId}, user ${userId}`, error);
+      this.logger.error(
+        `Falha ao chamar /verify para match ${payload.matchId}, user ${userId}`,
+        error,
+      );
       await this.trustScoreService.recordVerifyFailure(payload.matchId, userId);
-      // Nunca relança — uma falha do serviço de IA não pode derrubar o socket nem bloquear outros handlers.
     }
   }
 
-  /** Nunca confia em payload.userId para autorização — mesmo padrão de MatchmakingGateway.requireUserId. */
   private requireUserId(socket: Socket, payloadUserId: string): string {
     const userId = socket.data.userId as string;
     if (payloadUserId !== userId) {
-      this.logger.warn(`payload.userId (${payloadUserId}) não bate com o socket autenticado (${userId})`);
+      this.logger.warn(
+        `payload.userId (${payloadUserId}) não bate com o socket autenticado (${userId})`,
+      );
     }
     return userId;
   }

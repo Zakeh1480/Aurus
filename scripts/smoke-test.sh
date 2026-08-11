@@ -1,19 +1,4 @@
 #!/bin/sh
-# Smoke test cross-serviço dos containers Docker (Prompt 26) — sobe
-# postgres/redis/api/ai-service via Docker Compose e valida, contra
-# containers de verdade (não mocks), que os dois /health respondem com a
-# mesma auraScoreVersion e que o handshake X-AI-Service-Secret funciona de
-# ponta a ponta. Não cobre LiveKit/vídeo (exigiria credenciais reais).
-#
-# POSIX sh de propósito — roda dentro da imagem docker:27 (Alpine) usada
-# pelo job de CI, que só tem /bin/sh (sem bash/curl). O curl acontece via um
-# container efêmero curlimages/curl na mesma network do compose, em vez de
-# depender de portas publicadas (que em dind não são acessíveis via
-# "localhost" do job) ou de instalar curl na imagem base.
-#
-# Uso:
-#   SMOKE_TEST_MODE=local sh scripts/smoke-test.sh   # builda as imagens locais (default)
-#   SMOKE_TEST_MODE=ci sh scripts/smoke-test.sh       # dá pull nas imagens (API_IMAGE/AI_IMAGE)
 
 set -eu
 
@@ -26,10 +11,6 @@ MODE="${SMOKE_TEST_MODE:-local}"
 SHARED_SECRET="ci-smoke-dummy-shared-secret"
 TMP_DIR=$(mktemp -d)
 
-# env_file: ./.env é obrigatório no docker-compose.yml base — só precisa
-# existir (docker-compose.ci.yml supre os valores que importam via
-# `environment:`, que sempre vence sobre env_file na precedência do
-# Compose), então nunca sobrescreve um .env real de dev já existente.
 [ -f .env ] || : > .env
 
 cleanup() {

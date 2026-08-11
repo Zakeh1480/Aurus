@@ -51,8 +51,7 @@ export class MatchesController {
     }
 
     await this.livekit.ensureRoom(matchId);
-    // status já é "active" aqui (checado acima), então startedAt está sempre
-    // presente — o `?? new Date()` é só para satisfazer o tipo DateTime? do Prisma.
+
     this.matchDurationScheduler.scheduleForMatch(matchId, match.startedAt ?? new Date());
     const { token, expiresAt } = await this.livekit.createToken(matchId, user.id);
 
@@ -65,12 +64,6 @@ export class MatchesController {
     });
   }
 
-  /**
-   * Fairness (Prompt 13): breakdown com peso/contribuição por métrica, para
-   * contestação de resultado. Acesso: participante da partida ou moderador
-   * (revisão de denúncia) — mesmo padrão de autorização de issueToken acima,
-   * estendido para role=moderator.
-   */
   @Get(':id/score-explanation')
   async getScoreExplanation(
     @Param('id', ParseUUIDPipe) matchId: string,

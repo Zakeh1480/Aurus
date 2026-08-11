@@ -18,12 +18,6 @@ function fakeSocket(overrides: Partial<Socket> = {}): Socket {
   } as unknown as Socket;
 }
 
-/**
- * Migrado de MatchmakingGateway.afterInit (Prompt 16) — a autenticação do
- * handshake agora é registrada em MatchmakingIoAdapter.createIOServer, mas
- * a lógica em si (createHandshakeAuthMiddleware) é testável isolada, sem
- * precisar de um servidor Socket.IO real nem mockar o createIOServer herdado.
- */
 describe('createHandshakeAuthMiddleware', () => {
   let wsAuthService: { authenticate: ReturnType<typeof vi.fn> };
   let wsRateLimiter: { allow: ReturnType<typeof vi.fn> };

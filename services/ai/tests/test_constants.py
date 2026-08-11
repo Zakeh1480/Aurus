@@ -1,5 +1,3 @@
-"""Espelha packages/shared/test/constants.test.ts: pesos somam 1.0 e chaves batem com os schemas."""
-
 import math
 
 from app.constants import (

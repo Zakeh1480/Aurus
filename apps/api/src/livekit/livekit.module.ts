@@ -9,8 +9,6 @@ import { MatchesController } from './matches.controller';
 import { MatchForfeitGateway } from './match-forfeit.gateway';
 
 @Module({
-  // ScoringModule (não MatchmakingModule diretamente): o webhook e o gateway
-  // de desistência delegam a decisão de encerramento para ScoringService.
   imports: [ScoringModule],
   controllers: [MatchesController, LivekitWebhookController],
   providers: [

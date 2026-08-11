@@ -20,12 +20,10 @@ export function getLivekitTokenTtlSeconds(): number {
   return Number(process.env['LIVEKIT_TOKEN_TTL_SECONDS'] ?? 7200);
 }
 
-/** Cadência do poller cross-instance que varre `lk:match-duration:expiry` por partidas com tempo esgotado. */
 export function getMatchDurationPollIntervalMs(): number {
   return Number(process.env['MATCH_DURATION_POLL_INTERVAL_MS'] ?? 1000);
 }
 
-/** RoomServiceClient exige host http(s); LIVEKIT_URL vem em ws(s):// por convenção do LiveKit Cloud. */
 export function toHttpUrl(livekitUrl: string): string {
   return livekitUrl.replace(/^ws/, 'http');
 }

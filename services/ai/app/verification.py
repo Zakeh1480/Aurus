@@ -1,18 +1,3 @@
-"""Núcleo de verificação anti-cheat (Prompt 6b) — puro, sem qualquer import
-de FastAPI/HTTP, mesmo padrão de app/scoring.py.
-
-Reavalia server-side um único keyframe contra as features reivindicadas pelo
-cliente, usando heurísticas OpenCV de baixo custo (Haar cascade + variância
-de Laplaciano) em vez de um modelo de ML completo — decisão de Prompt 6b:
-verificação por amostragem exige custo/latência baixos, ao contrário da
-extração completa de landmarks (que continua no cliente, via MediaPipe WASM,
-por custo + LGPD — CLAUDE.md regra 5).
-
-`posture`/`expression`/`movement` não são reavaliáveis por este heurístico
-single-frame de baixo custo (exigiriam pose estimation completa) — só
-`presence`/`eyeContact` contribuem para o `discrepancy`.
-"""
-
 import base64
 import binascii
 from dataclasses import dataclass
@@ -29,23 +14,19 @@ from app.utils.time import to_iso_z, utc_now_iso
 _FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 _EYE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
 
-# Únicas dimensões que este heurístico consegue aproximar — pesos somam 1.0.
+
 DISCREPANCY_DIMENSION_WEIGHTS: dict[str, float] = {"presence": 0.6, "eyeContact": 0.4}
 
 
 @dataclass(frozen=True)
 class FacePresenceResult:
     faces_detected: int
-    largest_face_area_ratio: float  # área do maior rosto / área total da imagem
+    largest_face_area_ratio: float
     eyes_detected_in_largest_face: int
 
 
 def decode_keyframe(keyframe_base64: str) -> np.ndarray:
-    """Decodifica um base64 (JPEG/PNG) para uma imagem BGR do OpenCV.
 
-    Levanta ValueError em base64 corrompido ou bytes que não formam uma
-    imagem suportada — a camada HTTP mapeia isso para 422.
-    """
     try:
         raw = base64.b64decode(keyframe_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
@@ -53,14 +34,12 @@ def decode_keyframe(keyframe_base64: str) -> np.ndarray:
     image = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise ValueError("keyframeBase64 não decodifica para uma imagem suportada (JPEG/PNG)")
-    # cv2.imdecode não tem guarda de decompression-bomb — uma imagem craftada
-    # (ex. PNG de cor sólida) cabe folgada no limite de base64 comprimido
-    # (ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH) mas decodifica pra um array de
-    # centenas de megapixels, gastando memória/CPU muito além do esperado
-    # pra um keyframe de webcam.
+
     megapixels = (image.shape[0] * image.shape[1]) / 1_000_000
     if megapixels > VERIFY_MAX_IMAGE_MEGAPIXELS:
-        raise ValueError(f"keyframe decodificado excede o limite de {VERIFY_MAX_IMAGE_MEGAPIXELS} megapixels")
+        raise ValueError(
+            f"keyframe decodificado excede o limite de {VERIFY_MAX_IMAGE_MEGAPIXELS} megapixels"
+        )
     return image
 
 
@@ -73,7 +52,9 @@ def detect_face_presence(image_bgr: np.ndarray, *, settings: Settings) -> FacePr
         minNeighbors=settings.verify_haar_min_neighbors,
     )
     if len(faces) == 0:
-        return FacePresenceResult(faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0)
+        return FacePresenceResult(
+            faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0
+        )
 
     image_area = image_bgr.shape[0] * image_bgr.shape[1]
     x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
@@ -86,19 +67,14 @@ def detect_face_presence(image_bgr: np.ndarray, *, settings: Settings) -> FacePr
 
 
 def compute_blur_variance(image_bgr: np.ndarray) -> float:
-    """Variância do Laplaciano em grayscale — proxy clássico de nitidez/textura.
 
-    NÃO é uma medida temporal: mede só se ESTE frame parece uma foto
-    impressa, uma tela reexibida ou algo muito liso/comprimido. A comparação
-    entre múltiplos frames ao longo da partida (detectar replay/loop) é
-    responsabilidade do AntiCheatModule (apps/api), não deste endpoint
-    stateless de frame único.
-    """
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
-def compute_liveness_flags(face: FacePresenceResult, blur_variance: float, *, settings: Settings) -> LivenessFlags:
+def compute_liveness_flags(
+    face: FacePresenceResult, blur_variance: float, *, settings: Settings
+) -> LivenessFlags:
     return LivenessFlags(
         noFaceDetected=face.faces_detected == 0,
         staticImageSuspected=blur_variance < settings.verify_blur_variance_static_threshold,
@@ -128,12 +104,7 @@ def derive_eye_contact_proxy(face: FacePresenceResult) -> float:
 def compute_discrepancy(
     claimed: AuraFeatures, face: FacePresenceResult, *, settings: Settings
 ) -> tuple[float, float]:
-    """Retorna (discrepancy, confidence).
 
-    confidence = soma dos pesos das dimensões reavaliáveis (hoje sempre
-    1.0 — existe para permitir reduzir peso dinamicamente no futuro sem
-    quebrar o contrato de resposta).
-    """
     presence_diff = abs(claimed.presence - derive_presence_proxy(face, settings=settings))
     eye_diff = abs(claimed.eyeContact - derive_eye_contact_proxy(face))
     discrepancy = (
@@ -147,12 +118,10 @@ def _computed_at(now: datetime | None) -> str:
     return utc_now_iso() if now is None else to_iso_z(now)
 
 
-def verify(request: VerifyRequest, *, settings: Settings | None = None, now: datetime | None = None) -> VerifyResponse:
-    """Orquestração pura — decodifica, detecta, deriva discrepancy+liveness.
+def verify(
+    request: VerifyRequest, *, settings: Settings | None = None, now: datetime | None = None
+) -> VerifyResponse:
 
-    Levanta ValueError em base64/imagem inválidos (a camada HTTP mapeia
-    para 422).
-    """
     settings = settings or get_settings()
     image = decode_keyframe(request.keyframeBase64)
     face = detect_face_presence(image, settings=settings)

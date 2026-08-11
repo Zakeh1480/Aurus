@@ -1,5 +1,3 @@
-"""Testes do módulo puro de scoring — sem HTTP."""
-
 import statistics
 from datetime import datetime, timezone
 
@@ -38,7 +36,9 @@ def test_compute_score_stamps_version() -> None:
 
 
 def test_compute_score_breakdown_reflects_features() -> None:
-    features = _features(posture=0.11, eyeContact=0.22, expression=0.33, presence=0.44, movement=0.55)
+    features = _features(
+        posture=0.11, eyeContact=0.22, expression=0.33, presence=0.44, movement=0.55
+    )
     score = compute_score(features, now=FIXED_NOW)
     assert score.breakdown.posture == pytest.approx(0.11)
     assert score.breakdown.eyeContact == pytest.approx(0.22)

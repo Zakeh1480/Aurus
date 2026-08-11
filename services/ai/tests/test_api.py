@@ -1,5 +1,3 @@
-"""Testes da camada HTTP via fastapi.testclient.TestClient."""
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -99,10 +97,7 @@ def test_score_aggregate_overall_matches_weighted_sum(client: TestClient) -> Non
 
 
 def test_body_size_limit_rejects_oversized_request(client: TestClient) -> None:
-    """Corpo real acima de MAX_REQUEST_BODY_BYTES — o middleware rejeita pelo
-    Content-Length antes de qualquer validação Pydantic rodar (por isso
-    ultrapassa de propósito SCORE_AGGREGATE_MAX_SAMPLES também, sem que isso
-    importe: o corpo nunca chega no parsing pra essa checagem rodar)."""
+
     huge_samples = [make_features() for _ in range(20_000)]
     response = client.post("/score/aggregate", json={"samples": huge_samples})
     assert response.status_code == 413

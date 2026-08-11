@@ -6,11 +6,6 @@ export interface MatchOutcome {
   delta2: number;
 }
 
-/**
- * Vencedor decidido pelo AuraScore.overall (não pelo Elo — Elo só decide o
- * quanto o rating se move). Empate exato de overall → sem vencedor, Elo trata
- * como resultado 0.5/0.5 para os dois lados.
- */
 function expectedScore(ratingSelf: number, ratingOther: number): number {
   return 1 / (1 + 10 ** ((ratingOther - ratingSelf) / 400));
 }
@@ -27,11 +22,6 @@ function eloDeltas(
   return { delta1, delta2 };
 }
 
-/**
- * Elo clássico e simétrico: cada lado usa o rating do outro ANTES da
- * partida (nunca o já atualizado), e o resultado (1/0/0.5) vem do AuraScore,
- * não de vitória "externa" nenhuma — não existe placar fora do Aura Score.
- */
 export function computeMatchOutcome(
   score1: AuraScore,
   score2: AuraScore,
@@ -52,12 +42,6 @@ export function computeMatchOutcome(
   return { winnerSide, delta1, delta2 };
 }
 
-/**
- * Elo forçado: usado quando o resultado não vem do AuraScore (desistência),
- * mas de quem ficou na partida. `winnerSide` é decidido fora daqui — o
- * cálculo de delta é idêntico ao de computeMatchOutcome, só com actual1
- * fixo em 1/0 em vez de derivado de score.
- */
 export function computeForfeitOutcome(
   ratingBefore1: number,
   ratingBefore2: number,

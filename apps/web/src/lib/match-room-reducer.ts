@@ -8,7 +8,6 @@ import type {
 export type MatchRoomErrorKind =
   'not-found' | 'forbidden' | 'not-active' | 'permission-denied' | 'connection-failed' | 'timeout';
 
-/** opponentId (Prompt 13): usado para pré-preencher a denúncia/sinalização durante a partida. */
 export type LiveScores = { self: number; opponent: number; opponentId: string };
 
 export type PendingChallenge = { challengeId: string; expiresAt: string };
@@ -40,11 +39,6 @@ function toLiveScores(payload: MatchScoreTickPayload, selfUserId: string): LiveS
   return { self: self.liveScore, opponent: opponent.liveScore, opponentId: opponent.userId };
 }
 
-/**
- * `matchId` já é conhecido como prop de quem chama (diferente do
- * matchmaking-reducer, onde o matchId nasce de um evento) — o filtro por
- * matchId nos eventos do socket acontece no hook chamador, não aqui.
- */
 export function reduceMatchRoomState(
   state: MatchRoomState,
   action: MatchRoomAction,
@@ -92,9 +86,7 @@ export function reduceMatchRoomState(
               reason: action.payload.reason,
             };
       }
-      // Ordem esperada é match:end -> match:result, mas aceitar match:result
-      // direto também é inofensivo e mais robusto a uma reordenação de rede —
-      // sem um match:end prévio não há reason conhecido, assume "completed".
+
       if (action.type === 'MATCH_RESULT') {
         return { status: 'result', result: action.payload, reason: 'completed' };
       }

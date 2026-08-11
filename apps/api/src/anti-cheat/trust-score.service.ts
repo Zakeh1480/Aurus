@@ -8,12 +8,12 @@ import {
   TrustAssessmentSchema,
   type TrustLevel,
   type VerifyResponse,
-} from "@aurafarming/shared";
-import { Injectable, Logger } from "@nestjs/common";
+} from '@aurafarming/shared';
+import { Injectable, Logger } from '@nestjs/common';
 
-import { PrismaService } from "../prisma/prisma.service";
-import { RedisService } from "../redis/redis.service";
-import { getAntiCheatConfig } from "./anti-cheat.constants";
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { getAntiCheatConfig } from './anti-cheat.constants';
 
 const DECISION_RANK: Record<AntiCheatDecision, number> = { valid: 0, flagged: 1, discarded: 2 };
 
@@ -41,11 +41,6 @@ interface StatsCounters {
   temporalViolations: number;
 }
 
-/**
- * Contadores no Redis + fórmula de agregação (Prompt 6b) — sem ML, tudo
- * pesos fixos sobre contadores auditáveis. `getMatchDecision` é a API que o
- * Prompt 7 deve consultar antes de persistir MatchResult/atualizar rating.
- */
 @Injectable()
 export class TrustScoreService {
   private readonly logger = new Logger(TrustScoreService.name);
@@ -56,52 +51,55 @@ export class TrustScoreService {
   ) {}
 
   async recordChallengeIssued(matchId: string, userId: string): Promise<void> {
-    await this.hincr(matchId, userId, "challengesIssued", 1);
+    await this.hincr(matchId, userId, 'challengesIssued', 1);
   }
 
   async recordRejectedChallenge(matchId: string, userId: string): Promise<void> {
-    await this.hincr(matchId, userId, "challengesAnswered", 1);
-    await this.hincr(matchId, userId, "challengesRejected", 1);
+    await this.hincr(matchId, userId, 'challengesAnswered', 1);
+    await this.hincr(matchId, userId, 'challengesRejected', 1);
   }
 
   async recordVerifyResult(matchId: string, userId: string, result: VerifyResponse): Promise<void> {
     const key = this.statsKey(matchId, userId);
-    await this.redis.hincrby(key, "challengesAnswered", 1);
-    await this.redis.hincrbyfloat(key, "discrepancySum", result.discrepancy);
-    await this.redis.hincrby(key, "discrepancyCount", 1);
-    if (result.liveness.noFaceDetected) await this.redis.hincrby(key, "flagNoFaceDetected", 1);
-    if (result.liveness.staticImageSuspected) await this.redis.hincrby(key, "flagStaticImageSuspected", 1);
-    if (result.liveness.lowDetailSuspected) await this.redis.hincrby(key, "flagLowDetailSuspected", 1);
-    if (result.liveness.multipleFacesDetected) await this.redis.hincrby(key, "flagMultipleFacesDetected", 1);
+    await this.redis.hincrby(key, 'challengesAnswered', 1);
+    await this.redis.hincrbyfloat(key, 'discrepancySum', result.discrepancy);
+    await this.redis.hincrby(key, 'discrepancyCount', 1);
+    if (result.liveness.noFaceDetected) await this.redis.hincrby(key, 'flagNoFaceDetected', 1);
+    if (result.liveness.staticImageSuspected)
+      await this.redis.hincrby(key, 'flagStaticImageSuspected', 1);
+    if (result.liveness.lowDetailSuspected)
+      await this.redis.hincrby(key, 'flagLowDetailSuspected', 1);
+    if (result.liveness.multipleFacesDetected)
+      await this.redis.hincrby(key, 'flagMultipleFacesDetected', 1);
     await this.redis.expire(key, getAntiCheatConfig().statsTtlSeconds);
   }
 
-  /** AI service indisponível/timeout — conta como respondido (sem penalizar por conteúdo, já que não há dado). */
   async recordVerifyFailure(matchId: string, userId: string): Promise<void> {
-    await this.hincr(matchId, userId, "challengesAnswered", 1);
+    await this.hincr(matchId, userId, 'challengesAnswered', 1);
   }
 
   async recordDuplicateKeyframe(matchId: string, userId: string): Promise<void> {
-    await this.hincr(matchId, userId, "flagDuplicateKeyframe", 1);
+    await this.hincr(matchId, userId, 'flagDuplicateKeyframe', 1);
   }
 
   async recordAcceptedPacket(matchId: string, userId: string, violated: boolean): Promise<void> {
-    await this.hincr(matchId, userId, "packetsReceived", 1);
+    await this.hincr(matchId, userId, 'packetsReceived', 1);
     if (violated) {
-      await this.hincr(matchId, userId, "temporalViolations", 1);
+      await this.hincr(matchId, userId, 'temporalViolations', 1);
     }
   }
 
   async recordRejectedPacket(matchId: string, userId: string): Promise<void> {
-    await this.hincr(matchId, userId, "packetsReceived", 1);
-    await this.hincr(matchId, userId, "packetsRejected", 1);
+    await this.hincr(matchId, userId, 'packetsReceived', 1);
+    await this.hincr(matchId, userId, 'packetsRejected', 1);
   }
 
   async assessParticipant(matchId: string, userId: string): Promise<TrustAssessment> {
     const config = getAntiCheatConfig();
     const counters = await this.readCounters(matchId, userId);
 
-    const discrepancyAvg = counters.discrepancyCount > 0 ? counters.discrepancySum / counters.discrepancyCount : null;
+    const discrepancyAvg =
+      counters.discrepancyCount > 0 ? counters.discrepancySum / counters.discrepancyCount : null;
 
     const livenessNumerator =
       counters.flagStaticImageSuspected * 1.0 +
@@ -110,14 +108,19 @@ export class TrustScoreService {
       counters.flagMultipleFacesDetected * 0.6 +
       counters.flagLowDetailSuspected * 0.3 +
       counters.challengesRejected * 1.0;
-    const livenessPenalty = Math.min(1, livenessNumerator / Math.max(1, counters.challengesAnswered));
+    const livenessPenalty = Math.min(
+      1,
+      livenessNumerator / Math.max(1, counters.challengesAnswered),
+    );
 
     const rejectedPacketRatio =
       counters.packetsReceived > 0 ? counters.packetsRejected / counters.packetsReceived : 0;
 
-    const temporalPenalty = Math.min(1, counters.temporalViolations / config.temporalViolationSaturation);
+    const temporalPenalty = Math.min(
+      1,
+      counters.temporalViolations / config.temporalViolationSaturation,
+    );
 
-    // 0.5 = neutro quando nada foi amostrado ainda (nem heurística positiva nem negativa).
     const challengeCoverage =
       counters.challengesIssued > 0 ? counters.challengesAnswered / counters.challengesIssued : 0.5;
     const coveragePenalty = 1 - challengeCoverage;
@@ -132,9 +135,13 @@ export class TrustScoreService {
     );
 
     const trustLevel: TrustLevel =
-      trustScore >= config.trustHighMin ? "high" : trustScore < config.trustLowMax ? "low" : "medium";
+      trustScore >= config.trustHighMin
+        ? 'high'
+        : trustScore < config.trustLowMax
+          ? 'low'
+          : 'medium';
     const decision: AntiCheatDecision =
-      trustLevel === "high" ? "valid" : trustLevel === "medium" ? "flagged" : "discarded";
+      trustLevel === 'high' ? 'valid' : trustLevel === 'medium' ? 'flagged' : 'discarded';
 
     const livenessFlagCounts: LivenessFlagCounts = {
       noFaceDetectedCount: counters.flagNoFaceDetected,
@@ -161,12 +168,6 @@ export class TrustScoreService {
     } satisfies TrustAssessment);
   }
 
-  /**
-   * Chamar UMA VEZ por partida, no momento de persistir MatchResult/atualizar
-   * rating (Prompt 7) — nunca no caminho quente do score-tick. Idempotente:
-   * recomputa a partir dos contadores em Redis e faz upsert do
-   * AntiCheatIncident, então é seguro chamar de novo em caso de retry.
-   */
   async getMatchDecision(matchId: string): Promise<MatchTrustDecision> {
     const match = await this.prisma.match.findUniqueOrThrow({ where: { id: matchId } });
     const [player1, player2] = await Promise.all([
@@ -181,7 +182,7 @@ export class TrustScoreService {
 
     for (const assessment of [player1, player2]) {
       this.logger.log({
-        event: "anti_cheat_decision",
+        event: 'anti_cheat_decision',
         matchId,
         userId: assessment.userId,
         trustScore: assessment.trustScore,
@@ -191,11 +192,17 @@ export class TrustScoreService {
       });
     }
 
-    return MatchTrustDecisionSchema.parse({ matchId, player1, player2, overallDecision, evaluatedAt });
+    return MatchTrustDecisionSchema.parse({
+      matchId,
+      player1,
+      player2,
+      overallDecision,
+      evaluatedAt,
+    });
   }
 
   private async persistIncidentIfNeeded(assessment: TrustAssessment): Promise<void> {
-    if (assessment.decision === "valid") return;
+    if (assessment.decision === 'valid') return;
 
     const incident = await this.prisma.antiCheatIncident.upsert({
       where: { matchId_userId: { matchId: assessment.matchId, userId: assessment.userId } },
@@ -227,25 +234,26 @@ export class TrustScoreService {
       },
     });
 
-    // Auto-gera uma entrada revisável na fila de moderação (Prompt 13) — sem
-    // ação automática, só entra na fila para um moderador humano decidir.
-    // Upsert por antiCheatIncidentId: idempotente, nunca duplica nem reseta
-    // um caso já revisado quando o mesmo incidente é reavaliado.
     await this.prisma.report.upsert({
       where: { antiCheatIncidentId: incident.id },
       create: {
         reportedId: assessment.userId,
         matchId: assessment.matchId,
         antiCheatIncidentId: incident.id,
-        source: "anti_cheat",
-        reason: "cheating",
+        source: 'anti_cheat',
+        reason: 'cheating',
         details: `Gerado automaticamente pelo pipeline de anti-cheat (decisão: ${assessment.decision}).`,
       },
       update: {},
     });
   }
 
-  private async hincr(matchId: string, userId: string, field: keyof StatsCounters, amount: number): Promise<void> {
+  private async hincr(
+    matchId: string,
+    userId: string,
+    field: keyof StatsCounters,
+    amount: number,
+  ): Promise<void> {
     const key = this.statsKey(matchId, userId);
     await this.redis.hincrby(key, field, amount);
     await this.redis.expire(key, getAntiCheatConfig().statsTtlSeconds);
@@ -255,19 +263,19 @@ export class TrustScoreService {
     const raw = await this.redis.hgetall(this.statsKey(matchId, userId));
     const num = (field: keyof StatsCounters): number => Number(raw[field] ?? 0);
     return {
-      discrepancySum: num("discrepancySum"),
-      discrepancyCount: num("discrepancyCount"),
-      flagNoFaceDetected: num("flagNoFaceDetected"),
-      flagStaticImageSuspected: num("flagStaticImageSuspected"),
-      flagLowDetailSuspected: num("flagLowDetailSuspected"),
-      flagMultipleFacesDetected: num("flagMultipleFacesDetected"),
-      flagDuplicateKeyframe: num("flagDuplicateKeyframe"),
-      challengesIssued: num("challengesIssued"),
-      challengesAnswered: num("challengesAnswered"),
-      challengesRejected: num("challengesRejected"),
-      packetsReceived: num("packetsReceived"),
-      packetsRejected: num("packetsRejected"),
-      temporalViolations: num("temporalViolations"),
+      discrepancySum: num('discrepancySum'),
+      discrepancyCount: num('discrepancyCount'),
+      flagNoFaceDetected: num('flagNoFaceDetected'),
+      flagStaticImageSuspected: num('flagStaticImageSuspected'),
+      flagLowDetailSuspected: num('flagLowDetailSuspected'),
+      flagMultipleFacesDetected: num('flagMultipleFacesDetected'),
+      flagDuplicateKeyframe: num('flagDuplicateKeyframe'),
+      challengesIssued: num('challengesIssued'),
+      challengesAnswered: num('challengesAnswered'),
+      challengesRejected: num('challengesRejected'),
+      packetsReceived: num('packetsReceived'),
+      packetsRejected: num('packetsRejected'),
+      temporalViolations: num('temporalViolations'),
     };
   }
 

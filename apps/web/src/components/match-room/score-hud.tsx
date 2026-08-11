@@ -31,7 +31,7 @@ function ScoreCard({ label, value }: { label: string; value: number }) {
 type ScoreHudProps = {
   scores: LiveScores | null;
   ownMetrics: AuraMetricValues | null;
-  /** Date.now() de quando a partida entrou em "live" — o cronômetro é observado no cliente, sem startedAt confiável nesta página. */
+
   liveSince: number;
 };
 
@@ -44,10 +44,7 @@ export function ScoreHud({ scores, ownMetrics, liveSince }: ScoreHudProps) {
   }, []);
 
   const elapsedSeconds = Math.max(0, Math.floor((now - liveSince) / 1000));
-  // Cosmético — a autoridade real é o servidor (MatchDurationSchedulerService,
-  // contado a partir de Match.startedAt). liveSince é observado no cliente e
-  // normalmente começa um pouco depois do startedAt real, então esta
-  // contagem pode ficar levemente otimista perto do fim.
+
   const remainingSeconds = Math.max(0, MATCH_DURATION_SECONDS - elapsedSeconds);
 
   return (

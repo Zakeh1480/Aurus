@@ -29,12 +29,6 @@ export interface AntiCheatConfig {
   trustWeights: AntiCheatTrustWeights;
 }
 
-/**
- * Sem @nestjs/config (convenção do repo — ver matchmaking.constants.ts /
- * livekit.constants.ts): lê process.env diretamente, chamado sempre em tempo
- * de execução (nunca no import de módulo), já que o .env só é carregado
- * explicitamente em main.ts.
- */
 export function getAntiCheatConfig(): AntiCheatConfig {
   return {
     aiServiceUrl: process.env['AI_SERVICE_URL'] ?? 'http://localhost:8000',

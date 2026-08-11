@@ -37,9 +37,6 @@ services:
     env_file:
       - ./.env
     environment:
-      # Dentro da rede do compose os serviços se falam pelo nome do serviço,
-      # não "localhost" — sobrescreve os valores de .env (pensados para
-      # `pnpm dev` no host) aqui.
       DATABASE_URL: postgresql://aurafarming:aurafarming@postgres:5432/aurafarming
       REDIS_URL: redis://redis:6379
       AI_SERVICE_URL: http://ai-service:8000

@@ -28,7 +28,6 @@ import {
 
 import { getApiUrl } from './env';
 
-/** `{ success: true }` é um retorno inline dos controllers Nest, não um DTO de `shared`. */
 const SuccessSchema = z.object({ success: z.literal(true) });
 
 let accessToken: string | null = null;
@@ -37,11 +36,9 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
-/** Chamado no 401 de uma requisição autenticada; retorna o novo access token ou `null` se o refresh falhou. */
 type RefreshHandler = () => Promise<string | null>;
 let refreshHandler: RefreshHandler | null = null;
 
-/** Registrado pelo `AuthProvider` — mantém `api-client.ts` livre de import de React. */
 export function setRefreshHandler(handler: RefreshHandler | null): void {
   refreshHandler = handler;
 }
@@ -62,9 +59,9 @@ type ZodParseable<T> = { parse: (value: unknown) => T };
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
-  /** Anexa `Authorization: Bearer` com o access token em memória. Default: true. */
+
   auth?: boolean;
-  /** Necessário só nas rotas que leem/escrevem o cookie httpOnly `refresh_token`. Default: "omit". */
+
   credentials?: RequestCredentials;
 };
 
@@ -91,9 +88,6 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // Uma retentativa silenciosa via refresh — nunca para chamadas `auth: false`
-  // (login/register/refresh já não anexam o token) nem para a própria retentativa,
-  // o que garante no máximo uma chamada extra por requisição, sem loop.
   if (response.status === 401 && auth && !isRetry && refreshHandler) {
     const newToken = await refreshHandler();
     if (newToken) {
@@ -114,12 +108,6 @@ async function request<T>(
   }
 }
 
-/**
- * Variante multipart de `request()` — não dá para reaproveitar o helper
- * genérico porque ele sempre serializa `body` como JSON. Nunca seta
- * Content-Type manualmente: o browser define o boundary do multipart sozinho
- * a partir da instância de FormData.
- */
 async function requestMultipart<T>(
   path: string,
   schema: ZodParseable<T>,

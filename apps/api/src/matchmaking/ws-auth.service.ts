@@ -13,7 +13,6 @@ export class WsAuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  /** Verifica o token do handshake e resolve o userId — usado só na conexão do gateway. */
   async authenticate(token: string | undefined): Promise<string> {
     if (!token) {
       throw new UnauthorizedException();
@@ -26,9 +25,6 @@ export class WsAuthService {
       throw new UnauthorizedException();
     }
 
-    // Mesma releitura do Postgres que JwtStrategy.validate faz para REST —
-    // não confia só no payload, para invalidar contas anonimizadas (LGPD) ou
-    // banidas (Prompt 13) na hora, mesmo com access token ainda válido.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: { bansReceived: { where: activeBanWhere(), take: 1 } },

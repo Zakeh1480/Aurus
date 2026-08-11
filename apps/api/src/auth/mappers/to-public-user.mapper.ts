@@ -1,10 +1,6 @@
-import type { User as PrismaUser } from "@prisma/client";
-import type { User } from "@aurafarming/shared";
+import type { User as PrismaUser } from '@prisma/client';
+import type { User } from '@aurafarming/shared';
 
-/**
- * Monta o objeto campo a campo (nunca `{ ...user }`) para garantir
- * mecanicamente que `passwordHash`/`anonymizedAt` nunca saem da API.
- */
 export function toPublicUser(user: PrismaUser): User {
   return {
     id: user.id,

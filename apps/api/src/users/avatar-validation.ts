@@ -4,11 +4,6 @@ const MIME_EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-/**
- * Nunca confia no Content-Type declarado pelo cliente/multer — checa os
- * magic bytes reais do arquivo. Retorna null se não bater com nenhum
- * formato suportado.
- */
 export function detectImageMimeType(buffer: Buffer): string | null {
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
     return 'image/jpeg';

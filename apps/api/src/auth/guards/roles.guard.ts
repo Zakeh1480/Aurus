@@ -1,11 +1,15 @@
-import type { Role, User } from "@aurafarming/shared";
-import { ForbiddenException, Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import type { Request } from "express";
+import type { Role, User } from '@aurafarming/shared';
+import {
+  ForbiddenException,
+  Injectable,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
 
-import { ROLES_KEY } from "../decorators/roles.decorator";
+import { ROLES_KEY } from '../decorators/roles.decorator';
 
-/** Deve rodar depois de JwtAuthGuard no mesmo @UseGuards — lê request.user.role já populado. */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
@@ -21,7 +25,7 @@ export class RolesGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest<Request & { user: User }>();
     if (!requiredRoles.includes(user.role)) {
-      throw new ForbiddenException("Você não tem permissão para acessar este recurso.");
+      throw new ForbiddenException('Você não tem permissão para acessar este recurso.');
     }
     return true;
   }

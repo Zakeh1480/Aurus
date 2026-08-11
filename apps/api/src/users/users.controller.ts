@@ -55,9 +55,7 @@ export class UsersController {
   @Patch('profile')
   updateProfile(
     @CurrentUser() user: User,
-    // Pipe aplicado só ao parâmetro @Body() — um @UsePipes() de método roda contra
-    // TODOS os parâmetros do handler, inclusive @CurrentUser(), o que corrompia
-    // `user` (validado contra UpdateProfileRequestSchema, que não tem `id`/`email`).
+
     @Body(new ZodValidationPipe(UpdateProfileRequestSchema)) body: UpdateProfileRequest,
   ): Promise<Profile> {
     return this.usersService.updateProfile(user.id, body);
@@ -75,11 +73,6 @@ export class UsersController {
     return { success: true };
   }
 
-  /**
-   * Reemite o par de tokens da sessão atual (mesma sequência de
-   * AuthController.login) — senão o usuário ficaria deslogado ao trocar a
-   * própria senha, já que revogar todas as sessões (Prompt 29) inclui a atual.
-   */
   @Patch('password')
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async changePassword(

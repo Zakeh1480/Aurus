@@ -1,11 +1,3 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/user/application_security/sast/#available-cicd-variables
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure/
-# Dependency Scanning customization: https://docs.gitlab.com/user/application_security/dependency_scanning/dependency_scanning_sbom/#customizing-analyzer-behavior
-# Container Scanning customization: https://docs.gitlab.com/user/application_security/container_scanning/#customizing-analyzer-behavior
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
-#
 include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
@@ -19,9 +11,6 @@ stages:
 
 variables:
   PNPM_STORE_PATH: "$CI_PROJECT_DIR/.pnpm-store"
-  # Threshold do gate de severidade (Prompt 25, scripts/check-security-reports.mjs).
-  # Achados >= este valor falham o job security-gate. Ajustável por pipeline/CI
-  # variable sem precisar mexer no script.
   SECURITY_GATE_MIN_SEVERITY: "High"
 
 .node_setup:
@@ -31,11 +20,6 @@ variables:
     - corepack prepare pnpm@10.32.1 --activate
     - pnpm config set store-dir "$PNPM_STORE_PATH"
     - pnpm install --frozen-lockfile
-    # @prisma/client não está em pnpm.onlyBuiltDependencies (package.json raiz),
-    # então seu postinstall (que geraria o client) fica bloqueado pelo pnpm —
-    # sem isso, lint/typecheck/test/build falham em runner limpo com
-    # "Cannot find module '.prisma/client/default'". Mesmo passo do
-    # apps/api/Dockerfile.
     - pnpm --filter @aurafarming/api exec prisma generate --schema=prisma/schema.prisma
   cache:
     key:
@@ -103,10 +87,6 @@ docker-build:
   script:
     - docker build -f apps/api/Dockerfile -t aurafarming-api:ci .
     - docker build -f services/ai/Dockerfile -t aurafarming-ai:ci services/ai
-    # Publica no Container Registry do próprio projeto (CI_REGISTRY_* são
-    # variáveis nativas do GitLab CI, sem segredo novo — Prompt 24) — pré-
-    # requisito do template de Container Scanning, que exige uma imagem
-    # endereçável (CS_IMAGE) já publicada em algum registry.
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - docker tag aurafarming-api:ci "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
     - docker tag aurafarming-ai:ci "$CI_REGISTRY_IMAGE/ai:$CI_COMMIT_SHA"
@@ -166,12 +146,6 @@ smoke-test:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
-# Sem `needs:`/`dependencies:` de propósito (Prompt 25): sem isso, o GitLab
-# por padrão baixa os artifacts de TODOS os jobs dos estágios anteriores
-# (test + build) — inclui os relatórios de SAST/Secret Detection/Dependency
-# Scanning (stage test) e dos dois container_scanning_* (stage build) sem
-# precisar acertar o nome exato de cada job, que varia por versão/template
-# do GitLab.
 security-gate:
   stage: security-gate
   image: node:22-bookworm-slim

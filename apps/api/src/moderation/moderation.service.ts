@@ -5,14 +5,20 @@ import {
   type ReportDetail,
   type ReportListQuery,
   type ReportListResponse,
-} from "@aurafarming/shared";
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+} from '@aurafarming/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
-import { AuthService } from "../auth/auth.service";
-import { MatchmakingService } from "../matchmaking/matchmaking.service";
-import { PrismaService } from "../prisma/prisma.service";
-import { toAntiCheatIncident } from "./mappers/to-anti-cheat-incident.mapper";
-import { toReport } from "./mappers/to-report.mapper";
+import { AuthService } from '../auth/auth.service';
+import { MatchmakingService } from '../matchmaking/matchmaking.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { toAntiCheatIncident } from './mappers/to-anti-cheat-incident.mapper';
+import { toReport } from './mappers/to-report.mapper';
 
 @Injectable()
 export class ModerationService {
@@ -24,13 +30,13 @@ export class ModerationService {
 
   async createReport(reporterId: string, input: CreateReportRequest): Promise<Report> {
     if (input.reportedUserId === reporterId) {
-      throw new BadRequestException("Não é possível denunciar a si mesmo.");
+      throw new BadRequestException('Não é possível denunciar a si mesmo.');
     }
 
     if (input.matchId) {
       const match = await this.prisma.match.findUnique({ where: { id: input.matchId } });
       if (!match || (match.player1Id !== reporterId && match.player2Id !== reporterId)) {
-        throw new ForbiddenException("Você não participa desta partida.");
+        throw new ForbiddenException('Você não participa desta partida.');
       }
     }
 
@@ -39,7 +45,7 @@ export class ModerationService {
         reporterId,
         reportedId: input.reportedUserId,
         matchId: input.matchId ?? null,
-        source: "manual",
+        source: 'manual',
         reason: input.reason,
         details: input.details ?? null,
       },
@@ -52,7 +58,7 @@ export class ModerationService {
     const [reports, total] = await Promise.all([
       this.prisma.report.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { createdAt: 'desc' },
         take: query.limit,
         skip: query.offset,
       }),
@@ -64,7 +70,7 @@ export class ModerationService {
   async getReport(id: string): Promise<ReportDetail> {
     const report = await this.prisma.report.findUnique({ where: { id } });
     if (!report) {
-      throw new NotFoundException("Denúncia não encontrada.");
+      throw new NotFoundException('Denúncia não encontrada.');
     }
 
     const relatedAntiCheatIncidents = report.matchId
@@ -73,27 +79,28 @@ export class ModerationService {
         })
       : [];
 
-    return { ...toReport(report), relatedAntiCheatIncidents: relatedAntiCheatIncidents.map(toAntiCheatIncident) };
+    return {
+      ...toReport(report),
+      relatedAntiCheatIncidents: relatedAntiCheatIncidents.map(toAntiCheatIncident),
+    };
   }
 
-  /**
-   * dismissed/warned/banned são sempre escolha explícita do moderador —
-   * nenhum threshold automático decide isso por conta própria (CLAUDE.md,
-   * "trilha humana"). banExpiresAt (validado em ModerationActionRequestSchema)
-   * é obrigatório quando action === "banned", `null` = permanente.
-   */
-  async resolveReport(id: string, moderatorId: string, input: ModerationActionRequest): Promise<Report> {
+  async resolveReport(
+    id: string,
+    moderatorId: string,
+    input: ModerationActionRequest,
+  ): Promise<Report> {
     const report = await this.prisma.report.findUnique({ where: { id } });
     if (!report) {
-      throw new NotFoundException("Denúncia não encontrada.");
+      throw new NotFoundException('Denúncia não encontrada.');
     }
-    if (report.status !== "open") {
-      throw new ConflictException("Esta denúncia já foi resolvida.");
+    if (report.status !== 'open') {
+      throw new ConflictException('Esta denúncia já foi resolvida.');
     }
 
     const resolvedAt = new Date();
 
-    if (input.action === "banned") {
+    if (input.action === 'banned') {
       await this.prisma.$transaction(async (tx) => {
         const ban = await tx.ban.create({
           data: {
@@ -106,8 +113,8 @@ export class ModerationService {
         await tx.report.update({
           where: { id: report.id },
           data: {
-            status: "resolved",
-            action: "banned",
+            status: 'resolved',
+            action: 'banned',
             resolutionNote: input.note ?? null,
             resolvedById: moderatorId,
             resolvedAt,
@@ -116,15 +123,13 @@ export class ModerationService {
         });
       });
 
-      // Fora da transação (efeitos colaterais, não estado do banco): derruba
-      // sessões/refresh tokens e desconecta o socket ativo, se houver.
       await this.authService.forceLogout(report.reportedId);
       this.matchmakingService.disconnectUser(report.reportedId);
     } else {
       await this.prisma.report.update({
         where: { id: report.id },
         data: {
-          status: "resolved",
+          status: 'resolved',
           action: input.action,
           resolutionNote: input.note ?? null,
           resolvedById: moderatorId,

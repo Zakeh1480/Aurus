@@ -22,7 +22,6 @@ export function getGuardTtlMs(): number {
   return Number(process.env['MATCH_GUARD_TTL_MS'] ?? 21_600_000);
 }
 
-/** Cadência do poller cross-instance que varre `mm:pending:expiry` por partidas pendentes vencidas. */
 export function getAcceptPollIntervalMs(): number {
   return Number(process.env['MATCH_ACCEPT_POLL_INTERVAL_MS'] ?? 1000);
 }

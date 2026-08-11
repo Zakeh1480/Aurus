@@ -48,15 +48,10 @@ interface PersistResultInput {
   winnerId: string | null;
   ratingBefore1: number;
   ratingBefore2: number;
-  /** false em forfeit: a partida conta para matchesPlayed/wins/losses/rating, mas não para a média de AuraScore. */
+
   foldScoreIntoAverage?: boolean;
 }
 
-/**
- * Costura matchmaking -> IA -> resultado -> ranking. finalizeMatch é o único
- * ponto de entrada, chamado pelo webhook do LiveKit (participant_left) —
- * ver LivekitWebhookController.
- */
 @Injectable()
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name);
@@ -71,12 +66,6 @@ export class ScoringService {
     private readonly rankingService: RankingService,
   ) {}
 
-  /**
-   * Idempotente: a checagem inicial de status cobre o caso comum; uma
-   * segunda chamada concorrente que perca a corrida falha com P2002 no
-   * `matchResult.create` (matchId é @unique) e vira no-op silencioso — a
-   * primeira chamada já persistiu tudo e emitiu os eventos.
-   */
   async finalizeMatch(matchId: string): Promise<void> {
     const match = await this.prisma.match.findUnique({ where: { id: matchId } });
     if (!match || match.status !== 'active') return;
@@ -191,12 +180,6 @@ export class ScoringService {
     this.matchmakingService.emitToUser(match.player2Id, 'match:result', resultPayload);
   }
 
-  /**
-   * Encerramento administrativo: quem não é `forfeitingUserId` é declarado
-   * vencedor, independente de AuraScore/anti-cheat. Usado tanto pelo botão
-   * de desistência (MatchForfeitGateway) quanto pelo webhook do LiveKit
-   * quando um participante sai da room de uma partida ainda `active`.
-   */
   async forfeitMatch(matchId: string, forfeitingUserId: string): Promise<void> {
     const match = await this.prisma.match.findUnique({ where: { id: matchId } });
     if (!match || match.status !== 'active') return;

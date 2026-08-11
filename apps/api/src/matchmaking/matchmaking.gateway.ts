@@ -20,21 +20,11 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { WsRateLimiterService } from '../common/ws-rate-limiter.service';
 import { MatchmakingService } from './matchmaking.service';
 
-/** Janela fixa de 60s — @nestjs/throttler não cobre gateways WS (Prompt 13). */
 const QUEUE_JOIN_LIMIT = 10;
 const QUEUE_LEAVE_LIMIT = 10;
 const QUEUE_ACCEPT_LIMIT = 10;
 const QUEUE_RATE_WINDOW_MS = 60_000;
 
-/**
- * Autenticação do handshake (middleware do Socket.IO, `server.use(...)`)
- * vive em `MatchmakingIoAdapter.createIOServer` (Prompt 16), não aqui —
- * é compartilhada pelos 3 gateways (`MatchmakingGateway`,
- * `MatchScoringGateway`, `AntiCheatGateway`) no mesmo `Server`/namespace
- * default, e registrá-la na criação do server (bootstrap) em vez de no
- * `afterInit` de um gateway específico evita a autenticação inteira
- * depender de qual gateway o Nest instancia primeiro.
- */
 @WebSocketGateway()
 export class MatchmakingGateway implements OnGatewayDisconnect {
   private readonly logger = new Logger(MatchmakingGateway.name);
@@ -103,12 +93,6 @@ export class MatchmakingGateway implements OnGatewayDisconnect {
     await this.matchmakingService.accept(userId, payload.matchId);
   }
 
-  /**
-   * Nunca confia em `payload.userId` para autorização — o contrato
-   * congelado em `packages/shared` exige o campo, mas quem manda é sempre
-   * `socket.data.userId` (resolvido do JWT verificado no middleware de
-   * conexão). Um mismatch é logado, não aceito.
-   */
   private requireUserId(socket: Socket, payloadUserId: string): string {
     const userId = socket.data.userId as string;
     if (payloadUserId !== userId) {

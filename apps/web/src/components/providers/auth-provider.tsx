@@ -14,13 +14,12 @@ type AuthContextValue = {
   login: (body: LoginRequest) => Promise<void>;
   register: (body: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
-  /** Aplica uma sessão já emitida pela API (ex.: troca de senha/e-mail em `/configuracoes`) sem passar por login/refresh. */
+
   applySession: (response: AuthResponse) => void;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
-/** Refresca ~60s antes do vencimento do access token; piso de 5s contra TTLs artificialmente baixos. */
 function msUntilNextRefresh(expiresInSeconds: number): number {
   return Math.max((expiresInSeconds - 60) * 1000, 5_000);
 }
@@ -61,10 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [scheduleRefresh],
   );
 
-  // Deduplicado: chamadas concorrentes (mount + timer proativo + retentativa reativa
-  // de um 401) reaproveitam a mesma promise em voo, evitando N refreshes simultâneos
-  // — o backend revoga TODAS as sessões ao detectar reuso de um refresh token já
-  // rotacionado, então múltiplas chamadas /auth/refresh em paralelo seriam destrutivas.
   const performRefresh = React.useCallback(async (): Promise<string | null> => {
     if (refreshInFlightRef.current !== null) {
       return refreshInFlightRef.current;
@@ -92,9 +87,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return inFlight;
   }, [applyAuthResponse, clearScheduledRefresh]);
 
-  // `scheduleRefresh` é definido antes de `performRefresh` (para não reordenar as
-  // declarações acima), mas precisa chamar a versão mais recente de `performRefresh`
-  // — um ref evita um ciclo de dependências entre os dois `useCallback`s.
   const performRefreshRef = React.useRef(performRefresh);
   React.useEffect(() => {
     performRefreshRef.current = performRefresh;
@@ -105,8 +97,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setRefreshHandler(null);
   }, [performRefresh]);
 
-  // Deps vazias intencionalmente: só na montagem, restaura a sessão via cookie
-  // httpOnly. `performRefresh` já é estável o bastante via `useCallback`.
   React.useEffect(() => {
     void performRefresh();
     return () => clearScheduledRefresh();
@@ -120,8 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResponse],
   );
 
-  // POST /auth/register só cria a conta (retorna User, sem tokens/cookie) — o
-  // login em seguida é responsabilidade de quem chama (Prompt 9: fluxo de UI).
   const register = React.useCallback(async (body: RegisterRequest) => {
     await authApi.register(body);
   }, []);

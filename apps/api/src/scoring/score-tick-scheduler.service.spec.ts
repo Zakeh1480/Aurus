@@ -138,9 +138,9 @@ describe('ScoreTickSchedulerService', () => {
         1_000_000,
         1_000_000 + 5000,
       );
-      // match-1: claim retornou 1 → esta réplica venceu, processa o tick.
+
       expect(prisma.match.findUnique).toHaveBeenCalledWith({ where: { id: 'match-1' } });
-      // match-2: claim retornou 0 → outra réplica já reivindicou este ciclo, no-op.
+
       expect(prisma.match.findUnique).not.toHaveBeenCalledWith({ where: { id: 'match-2' } });
     });
 
@@ -319,8 +319,6 @@ describe('ScoreTickSchedulerService', () => {
       await service.pollDueTicks();
       expect(matchmakingService.emitToUser).not.toHaveBeenCalled();
 
-      // Uma segunda varredura confirma que o cancelamento removeu de fato a
-      // entrada do ZSET — não é só um "skip" pontual deste ciclo.
       vi.spyOn(Date, 'now').mockReturnValue(2000);
       await service.pollDueTicks();
       expect(matchmakingService.emitToUser).not.toHaveBeenCalled();
@@ -334,7 +332,7 @@ describe('ScoreTickSchedulerService', () => {
       vi.spyOn(Date, 'now').mockReturnValue(1000);
       await service.pollDueTicks();
 
-      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(2); // não 4
+      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(2);
     });
 
     it('cancel() impede ticks futuros', async () => {
@@ -377,7 +375,7 @@ describe('ScoreTickSchedulerService', () => {
       await service.pollDueTicks();
       await serviceReplicaB.pollDueTicks();
 
-      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(2); // não 4
+      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -1,6 +1,3 @@
-// Espelho persistente dos contratos Zod em @aurafarming/shared.
-// Nenhum enum/DTO de domínio é redefinido aqui — os enums abaixo reusam
-// exatamente os valores de MatchStatusSchema (packages/shared).
 
 generator client {
   provider = "prisma-client-js"
@@ -73,9 +70,7 @@ model User {
   passwordHash String
   displayName  String
   avatarUrl    String?
-  /// LGPD: null = conta ativa; timestamp = conta anonimizada (nunca hard-delete).
   anonymizedAt DateTime?
-  /// Papel de moderação — bootstrap via MODERATION_BOOTSTRAP_EMAILS (Prompt 13), sem UI de promoção.
   role         Role      @default(user)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -153,12 +148,9 @@ model Match {
   player1Id       String
   player2Id       String
   status          MatchStatus @default(pending)
-  /// Carimbo de AURA_SCORE_VERSION (packages/shared) no momento do score.
   scoreVersion    String?
-  /// Último AuraFeatures (packages/shared) recebido de cada jogador — estado ao vivo.
   featuresPlayer1 Json?
   featuresPlayer2 Json?
-  /// Último AuraScore (packages/shared) calculado para cada jogador — estado ao vivo.
   scorePlayer1    Json?
   scorePlayer2    Json?
   winnerId        String?
@@ -186,7 +178,6 @@ model MatchParticipant {
   userId       String
   side         MatchSide
   ratingBefore Int
-  /// null até a partida terminar e o resultado (Aura Score) ser gravado.
   ratingAfter  Int?
   createdAt    DateTime  @default(now())
 
@@ -203,11 +194,9 @@ model MatchResult {
   id                 String   @id @default(uuid(7))
   matchId            String   @unique
   player1Id          String
-  /// AuraScore (packages/shared) consolidado do player1, breakdown incluso.
   player1Score       Json
   player1RatingDelta Int
   player2Id          String
-  /// AuraScore (packages/shared) consolidado do player2, breakdown incluso.
   player2Score       Json
   player2RatingDelta Int
   winnerId           String?
@@ -223,13 +212,11 @@ model MatchResult {
   @@map("match_results")
 }
 
-/// Fonte de verdade durável do ranking — Redis é cache/derivado disto, não o inverso.
 model RankingSnapshot {
   id            String   @id @default(uuid(7))
   snapshotAt    DateTime @default(now())
   rank          Int
   userId        String
-  /// Denormalizado no momento do snapshot — não muda se o usuário renomear depois.
   displayName   String
   rating        Int
   auraScoreAvg  Float
@@ -242,9 +229,6 @@ model RankingSnapshot {
   @@map("ranking_snapshots")
 }
 
-/// Registrado pelo AntiCheatModule (Prompt 6b) sempre que a decisão para um
-/// participante não é "valid" — alimenta moderação assíncrona (Prompt 13).
-/// Não existe um por partida legítima: resultado válido não gera linha aqui.
 model AntiCheatIncident {
   id                     String            @id @default(uuid(7))
   matchId                String
@@ -252,22 +236,18 @@ model AntiCheatIncident {
   decision               AntiCheatDecision
   trustLevel             TrustLevel
   trustScore             Float
-  /// Média de `discrepancy` dos /verify concluídos; null se nenhum foi concluído.
   discrepancyAvg         Float?
   rejectedPacketRatio    Float
   temporalViolationCount Int
   challengesIssued       Int
   challengesAnswered     Int
-  /// Contagens de flags de liveness + qualquer contexto extra — Json para não engessar o shape a cada novo flag.
   detail                 Json
-  /// Carimbo de ANTI_CHEAT_VERSION (packages/shared) no momento da avaliação.
   version                String
   createdAt              DateTime          @default(now())
   updatedAt              DateTime          @updatedAt
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
-  /// Presente quando o incidente auto-gerou uma entrada na fila de moderação (Prompt 13, source=anti_cheat).
   report Report?
 
   @@unique([matchId, userId])
@@ -276,17 +256,11 @@ model AntiCheatIncident {
   @@map("anti_cheat_incidents")
 }
 
-/// Caso de moderação — criado manualmente (denúncia de um jogador) ou
-/// automaticamente pelo AntiCheatModule (source=anti_cheat, sem reporter humano)
-/// quando um incidente não-"valid" é persistido. Fila revisada por usuários
-/// com role=moderator; nenhuma ação é tomada automaticamente (Prompt 13).
 model Report {
   id                  String                @id @default(uuid(7))
   reporterId          String?
   reportedId          String
   matchId             String?
-  /// Chave de upsert idempotente para reports auto-gerados — evita duplicar
-  /// entradas quando o mesmo incidente é reavaliado/repersistido.
   antiCheatIncidentId String?               @unique
   source              ReportSource          @default(manual)
   reason              ReportReason
@@ -313,14 +287,11 @@ model Report {
   @@map("reports")
 }
 
-/// Registro append-only de bans — nunca é hard-deletado; "levantar" um ban é
-/// uma transição gravada (liftedAt/liftedById), não uma remoção de linha.
 model Ban {
   id         String    @id @default(uuid(7))
   userId     String
   issuedById String
   reason     String
-  /// null = permanente. Duração é sempre escolha explícita do moderador (Prompt 13) — sem threshold automático.
   expiresAt  DateTime?
   liftedAt   DateTime?
   liftedById String?

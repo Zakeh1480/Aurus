@@ -1,31 +1,31 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 
-import { extractAuraMetrics, type AuraMetricValues, type FaceDetectionSample } from "@/lib/aura-features-extraction";
-import { getFaceLandmarker, toFaceDetectionSample } from "@/lib/face-landmarker-runtime";
-import type { AuraFeaturesWorkerRequest, AuraFeaturesWorkerResponse } from "@/workers/aura-features.protocol";
+import {
+  extractAuraMetrics,
+  type AuraMetricValues,
+  type FaceDetectionSample,
+} from '@/lib/aura-features-extraction';
+import { getFaceLandmarker, toFaceDetectionSample } from '@/lib/face-landmarker-runtime';
+import type {
+  AuraFeaturesWorkerRequest,
+  AuraFeaturesWorkerResponse,
+} from '@/workers/aura-features.protocol';
 
-/** Cadência única de detecção — ~5 amostras por tick de 5s do servidor (MATCH_SCORE_TICK_INTERVAL_MS). */
 const CAPTURE_INTERVAL_MS = 1000;
 
-export type AuraFeaturesStatus = "initializing" | "ready" | "unavailable";
+export type AuraFeaturesStatus = 'initializing' | 'ready' | 'unavailable';
 
 export type UseAuraFeaturesResult = {
   status: AuraFeaturesStatus;
   metrics: AuraMetricValues | null;
 };
 
-/**
- * Extrai AuraFeatures do vídeo local via MediaPipe FaceLandmarker. Tenta
- * rodar num Worker (não trava a UI); se o worker falhar por qualquer razão
- * (module worker vs. o bootstrap WASM do @mediapipe/tasks-vision é uma
- * combinação que não foi possível validar fora de um browser real — ver
- * plano do Prompt 11), cai para a mesma extração na thread principal. A
- * cadência de 1x/segundo torna esse fallback aceitável.
- */
-export function useAuraFeatures(videoRef: React.RefObject<HTMLVideoElement | null>): UseAuraFeaturesResult {
-  const [status, setStatus] = React.useState<AuraFeaturesStatus>("initializing");
+export function useAuraFeatures(
+  videoRef: React.RefObject<HTMLVideoElement | null>,
+): UseAuraFeaturesResult {
+  const [status, setStatus] = React.useState<AuraFeaturesStatus>('initializing');
   const [metrics, setMetrics] = React.useState<AuraMetricValues | null>(null);
 
   React.useEffect(() => {
@@ -57,7 +57,11 @@ export function useAuraFeatures(videoRef: React.RefObject<HTMLVideoElement | nul
       try {
         const bitmap = await createImageBitmap(video);
         worker.postMessage(
-          { type: "detect", bitmap, timestampMs: performance.now() } satisfies AuraFeaturesWorkerRequest,
+          {
+            type: 'detect',
+            bitmap,
+            timestampMs: performance.now(),
+          } satisfies AuraFeaturesWorkerRequest,
           [bitmap],
         );
       } catch {
@@ -89,16 +93,18 @@ export function useAuraFeatures(videoRef: React.RefObject<HTMLVideoElement | nul
         .then(() => {
           if (cancelled) return;
           readyRef.current = true;
-          setStatus("ready");
+          setStatus('ready');
           intervalId = setInterval(() => void captureTickMainThread(), CAPTURE_INTERVAL_MS);
         })
         .catch(() => {
-          if (!cancelled) setStatus("unavailable");
+          if (!cancelled) setStatus('unavailable');
         });
     }
 
     try {
-      worker = new Worker(new URL("../workers/aura-features.worker.ts", import.meta.url), { type: "module" });
+      worker = new Worker(new URL('../workers/aura-features.worker.ts', import.meta.url), {
+        type: 'module',
+      });
     } catch {
       startMainThreadFallback();
       return () => {
@@ -107,16 +113,16 @@ export function useAuraFeatures(videoRef: React.RefObject<HTMLVideoElement | nul
       };
     }
 
-    worker.addEventListener("message", (event: MessageEvent<AuraFeaturesWorkerResponse>) => {
+    worker.addEventListener('message', (event: MessageEvent<AuraFeaturesWorkerResponse>) => {
       const message = event.data;
-      if (message.type === "ready") {
+      if (message.type === 'ready') {
         if (cancelled) return;
         readyRef.current = true;
-        setStatus("ready");
+        setStatus('ready');
         intervalId = setInterval(() => void captureTickWorker(), CAPTURE_INTERVAL_MS);
-      } else if (message.type === "result") {
+      } else if (message.type === 'result') {
         handleSample(message.sample);
-      } else if (message.type === "error") {
+      } else if (message.type === 'error') {
         if (readyRef.current) {
           busyRef.current = false;
         } else {
@@ -125,14 +131,14 @@ export function useAuraFeatures(videoRef: React.RefObject<HTMLVideoElement | nul
       }
     });
 
-    worker.addEventListener("error", () => {
+    worker.addEventListener('error', () => {
       if (!readyRef.current) startMainThreadFallback();
     });
 
     return () => {
       cancelled = true;
       clearTick();
-      worker?.postMessage({ type: "dispose" } satisfies AuraFeaturesWorkerRequest);
+      worker?.postMessage({ type: 'dispose' } satisfies AuraFeaturesWorkerRequest);
     };
   }, [videoRef]);
 

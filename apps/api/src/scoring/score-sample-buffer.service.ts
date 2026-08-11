@@ -1,15 +1,9 @@
-import type { AuraFeatures } from "@aurafarming/shared";
-import { Injectable } from "@nestjs/common";
+import type { AuraFeatures } from '@aurafarming/shared';
+import { Injectable } from '@nestjs/common';
 
-import { RedisService } from "../redis/redis.service";
-import { getScoringConfig } from "./scoring.constants";
+import { RedisService } from '../redis/redis.service';
+import { getScoringConfig } from './scoring.constants';
 
-/**
- * Guarda, por (matchId, userId): a última amostra recebida (para o tick ao
- * vivo) e o histórico completo limitado (para POST /score/aggregate no
- * encerramento). Chaves próprias do módulo de scoring — não reaproveita as
- * chaves de FeatureBufferService (Prompt 6b), que servem só o anti-cheat.
- */
 @Injectable()
 export class ScoreSampleBufferService {
   constructor(private readonly redis: RedisService) {}
@@ -18,7 +12,12 @@ export class ScoreSampleBufferService {
     const config = getScoringConfig();
     const serialized = JSON.stringify(features);
 
-    await this.redis.set(this.latestKey(matchId, userId), serialized, "EX", config.sampleBufferTtlSeconds);
+    await this.redis.set(
+      this.latestKey(matchId, userId),
+      serialized,
+      'EX',
+      config.sampleBufferTtlSeconds,
+    );
 
     const listKey = this.samplesKey(matchId, userId);
     await this.redis.rpush(listKey, serialized);

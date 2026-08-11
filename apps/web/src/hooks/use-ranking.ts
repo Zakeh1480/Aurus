@@ -1,11 +1,10 @@
-"use client";
+'use client';
 
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from '@tanstack/react-query';
 
-import { rankingApi } from "@/lib/api-client";
-import { rankingListQueryKey } from "@/lib/query-keys";
+import { rankingApi } from '@/lib/api-client';
+import { rankingListQueryKey } from '@/lib/query-keys';
 
-/** Mesmo valor do default de RankingListQuerySchema.limit em shared. */
 export const RANKING_PAGE_SIZE = 20;
 
 export function useRanking() {

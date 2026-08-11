@@ -1,5 +1,3 @@
-"""Testes da camada HTTP de POST /verify via fastapi.testclient.TestClient."""
-
 from fastapi.testclient import TestClient
 
 from app.constants import ANTI_CHEAT_VERSION

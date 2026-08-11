@@ -1,14 +1,13 @@
-import { Injectable } from "@nestjs/common";
-import { AccessToken, RoomServiceClient, WebhookEvent, WebhookReceiver } from "livekit-server-sdk";
+import { Injectable } from '@nestjs/common';
+import { AccessToken, RoomServiceClient, WebhookEvent, WebhookReceiver } from 'livekit-server-sdk';
 
-import { getLivekitConfig, getLivekitTokenTtlSeconds, toHttpUrl } from "./livekit.constants";
+import { getLivekitConfig, getLivekitTokenTtlSeconds, toHttpUrl } from './livekit.constants';
 
 export interface LivekitTokenResult {
   token: string;
   expiresAt: Date;
 }
 
-/** Wrapper fino sobre o server SDK do LiveKit — emissão de token, ciclo de vida de room e verificação de webhook. */
 @Injectable()
 export class LivekitService {
   private readonly config = getLivekitConfig();
@@ -23,33 +22,33 @@ export class LivekitService {
     return this.config.url;
   }
 
-  /** Idempotente — não falha se a room já existir. */
   async ensureRoom(roomName: string): Promise<void> {
     try {
       await this.roomService.createRoom({ name: roomName, maxParticipants: 2, emptyTimeout: 300 });
     } catch {
-      // room já existe (ou já foi criada implicitamente pelo primeiro participante) — ok.
+      return;
     }
   }
 
   async createToken(roomName: string, userId: string): Promise<LivekitTokenResult> {
     const ttlSeconds = getLivekitTokenTtlSeconds();
-    const at = new AccessToken(this.config.apiKey, this.config.apiSecret, { identity: userId, ttl: ttlSeconds });
+    const at = new AccessToken(this.config.apiKey, this.config.apiSecret, {
+      identity: userId,
+      ttl: ttlSeconds,
+    });
     at.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true });
     const token = await at.toJwt();
     return { token, expiresAt: new Date(Date.now() + ttlSeconds * 1000) };
   }
 
-  /** Idempotente — não falha se a room já não existir. */
   async deleteRoom(roomName: string): Promise<void> {
     try {
       await this.roomService.deleteRoom(roomName);
     } catch {
-      // já não existe — ok.
+      return;
     }
   }
 
-  /** Lança se a assinatura do webhook (header Authorization) for inválida. */
   verifyWebhook(rawBody: string, authHeader: string): Promise<WebhookEvent> {
     return this.webhookReceiver.receive(rawBody, authHeader);
   }

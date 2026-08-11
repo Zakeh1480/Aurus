@@ -24,11 +24,10 @@ import { captureSnapshotBase64 } from '@/lib/snapshot-capture';
 import { useAuraFeatures, type AuraFeaturesStatus } from './use-aura-features';
 import type { LivekitRoomStatus } from './use-livekit-room';
 
-/** ~5 amostras por tick de 5s do servidor (MATCH_SCORE_TICK_INTERVAL_MS). */
 const FEATURE_SEND_INTERVAL_MS = 1000;
-/** Se match:result não chegar nesse tempo depois de match:end (reason completed), cai em erro em vez de spinner infinito. */
+
 const RESULT_TIMEOUT_MS = 12_000;
-/** Não vale a pena tentar responder um challenge perto demais do expiresAt. */
+
 const CHALLENGE_SAFETY_MARGIN_MS = 2_000;
 
 const ZERO_METRICS: AuraMetricValues = {
@@ -55,12 +54,6 @@ function mapApiErrorToErrorKind(error: unknown): MatchRoomErrorKind {
   return 'connection-failed';
 }
 
-/**
- * Orquestra a partida: obtém o segredo de sessão anti-cheat, assina e emite
- * match:features num intervalo fixo, escuta os eventos do servidor e
- * responde a match:verify-challenge automaticamente. Combinado com
- * useLivekitRoom (vídeo) para decidir connecting -> live.
- */
 export function useMatchRoom(
   matchId: string,
   livekitStatus: LivekitRoomStatus,
@@ -87,8 +80,6 @@ export function useMatchRoom(
     statusRef.current = state.status;
   }, [state.status]);
 
-  // Busca o segredo de sessão (get-or-create, TTL de 3h — seguro chamar de
-  // novo em cada mount, inclusive após um refresh no meio da partida).
   React.useEffect(() => {
     let cancelled = false;
     matchesApi
@@ -108,7 +99,6 @@ export function useMatchRoom(
     };
   }, [matchId]);
 
-  // connecting -> live só quando LiveKit conectou E o segredo foi obtido.
   React.useEffect(() => {
     if (livekitStatus !== 'connecting' && livekitStatus !== 'connected') {
       dispatch({ type: 'CONNECTION_FAILED', kind: livekitStatus });
@@ -123,14 +113,12 @@ export function useMatchRoom(
     }
   }, [livekitStatus, secretStatus, secretErrorKind]);
 
-  // Timeout de match:result depois de um match:end "completed".
   React.useEffect(() => {
     if (state.status !== 'ended-awaiting-result') return;
     const timeoutId = setTimeout(() => dispatch({ type: 'RESULT_TIMEOUT' }), RESULT_TIMEOUT_MS);
     return () => clearTimeout(timeoutId);
   }, [state.status]);
 
-  // Emite match:features assinado num intervalo fixo enquanto a partida está "live".
   React.useEffect(() => {
     if (!socket || !user) return;
     let sequence = Date.now();
@@ -160,7 +148,6 @@ export function useMatchRoom(
     return () => clearInterval(intervalId);
   }, [socket, user, matchId]);
 
-  // Escuta os eventos do servidor (filtrados por matchId) e responde a challenges.
   React.useEffect(() => {
     if (!socket || !user) return;
 
@@ -181,13 +168,9 @@ export function useMatchRoom(
       try {
         keyframeBase64 = await captureSnapshotBase64(video);
       } catch {
-        // Sem ack no protocolo — melhor desistir desse challenge do que travar o fluxo.
         return;
       }
 
-      // Ecoa o nonce recebido no challenge — NÃO gera um novo (diferente de
-      // match:features). O servidor valida igualdade exata com o nonce que
-      // ele mesmo emitiu (NonceService.consumeChallengeNonce).
       const canonical = buildVerifyResponseSigningPayload({
         matchId,
         userId: user!.id,

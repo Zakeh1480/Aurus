@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import type { User } from "@aurafarming/shared";
+import { useQuery } from '@tanstack/react-query';
+import type { User } from '@aurafarming/shared';
 
-import type { AuthStatus } from "@/components/providers/auth-provider";
-import { useAuth } from "@/components/providers/auth-provider";
-import { usersApi } from "@/lib/api-client";
-import { isCameraConsentGranted } from "@/lib/consent";
-import { consentStatusQueryKey } from "@/lib/query-keys";
+import type { AuthStatus } from '@/components/providers/auth-provider';
+import { useAuth } from '@/components/providers/auth-provider';
+import { usersApi } from '@/lib/api-client';
+import { isCameraConsentGranted } from '@/lib/consent';
+import { consentStatusQueryKey } from '@/lib/query-keys';
 
-export type CameraConsentState = "unknown" | "loading" | "granted" | "required";
+export type CameraConsentState = 'unknown' | 'loading' | 'granted' | 'required';
 
 export type SessionState = {
   status: AuthStatus;
@@ -18,34 +18,29 @@ export type SessionState = {
   canEnterQueue: boolean;
 };
 
-/**
- * Combina autenticação + consentimento de câmera numa única fonte de verdade —
- * é isto que o Prompt 10 (lobby/fila) deve importar para decidir se pode
- * renderizar a entrada na fila.
- */
 export function useSession(): SessionState {
   const { status, user } = useAuth();
 
   const consentQuery = useQuery({
     queryKey: consentStatusQueryKey,
     queryFn: usersApi.consentStatus,
-    enabled: status === "authenticated",
+    enabled: status === 'authenticated',
     staleTime: 60_000,
   });
 
   const cameraConsent: CameraConsentState =
-    status !== "authenticated"
-      ? "unknown"
+    status !== 'authenticated'
+      ? 'unknown'
       : consentQuery.isPending
-        ? "loading"
+        ? 'loading'
         : isCameraConsentGranted(consentQuery.data ?? [])
-          ? "granted"
-          : "required";
+          ? 'granted'
+          : 'required';
 
   return {
     status,
     user,
     cameraConsent,
-    canEnterQueue: status === "authenticated" && cameraConsent === "granted",
+    canEnterQueue: status === 'authenticated' && cameraConsent === 'granted',
   };
 }

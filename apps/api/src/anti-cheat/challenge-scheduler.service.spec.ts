@@ -66,7 +66,7 @@ describe('ChallengeSchedulerService', () => {
 
     it('ensureScheduledForMatch cria o agendamento dos dois jogadores via eval (script de criação)', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
-      vi.spyOn(Math, 'random').mockReturnValue(0); // targetCount = min, delay = intervalMin
+      vi.spyOn(Math, 'random').mockReturnValue(0);
 
       service.ensureScheduledForMatch('match-1', 'player-1', 'player-2');
       await vi.waitFor(() => expect(redis.eval).toHaveBeenCalledTimes(2));
@@ -76,10 +76,10 @@ describe('ChallengeSchedulerService', () => {
         2,
         scheduleKey('match-1', 'player-1'),
         DUE_ZSET_KEY,
-        2, // challengesMin
-        1_000_000, // sessionStartedAt
+        2,
+        1_000_000,
         'match-1:player-1',
-        1_000_000 + 1000, // sessionStartedAt + challengeIntervalMinMs
+        1_000_000 + 1000,
       );
       expect(redis.eval).toHaveBeenCalledWith(
         expect.any(String),
@@ -94,7 +94,7 @@ describe('ChallengeSchedulerService', () => {
     });
 
     it('ensureScheduledForMatch não agenda quando o delay sorteado já estoura maxSessionMs', async () => {
-      vi.stubEnv('ANTI_CHEAT_MAX_SESSION_MS', '500'); // menor que o challengeIntervalMinMs (1000)
+      vi.stubEnv('ANTI_CHEAT_MAX_SESSION_MS', '500');
       vi.spyOn(Math, 'random').mockReturnValue(0);
 
       service.ensureScheduledForMatch('match-1', 'player-1', 'player-2');
@@ -139,7 +139,7 @@ describe('ChallengeSchedulerService', () => {
 
     it('não reagenda o próximo ciclo quando o script de claim retorna isLast=1', async () => {
       redis.zrangebyscore.mockResolvedValueOnce(['match-1:player-1']).mockResolvedValueOnce([]);
-      redis.eval.mockResolvedValueOnce([1, '500000', 1]); // isLast
+      redis.eval.mockResolvedValueOnce([1, '500000', 1]);
 
       await service.pollDueChallenges();
 
@@ -187,14 +187,6 @@ describe('ChallengeSchedulerService', () => {
       sessionStartedAt: number;
     }
 
-    /**
-     * Distingue CREATE_SCHEDULE_SCRIPT de CLAIM_AND_ADVANCE_SCRIPT pela
-     * ARIDADE dos args (estável, não depende do texto do script real): o
-     * serviço sempre chama eval com (script, numKeys, hashKey, zsetKey, ...).
-     * createSchedule manda mais 4 args (targetCount/sessionStartedAt/member/
-     * dueAt) — 6 no total após numKeys; claimAndFire manda mais 2
-     * (member/now) — 4 no total.
-     */
     function fakeChallengeRedis() {
       const schedules = new Map<string, FakeSchedule>();
       const due = new Map<string, number>();
@@ -337,14 +329,14 @@ describe('ChallengeSchedulerService', () => {
       vi.spyOn(Date, 'now').mockReturnValue(0);
       service.ensureScheduledForMatch('match-1', 'player-1', 'player-2');
       service.ensureScheduledForMatch('match-1', 'player-1', 'player-2');
-      await vi.waitFor(() => expect(redis.eval).toHaveBeenCalledTimes(4)); // 2 chamadas x 2 jogadores
+      await vi.waitFor(() => expect(redis.eval).toHaveBeenCalledTimes(4));
 
       vi.spyOn(Date, 'now').mockReturnValue(1000);
       await service.pollDueChallenges();
       vi.spyOn(Date, 'now').mockReturnValue(2000);
       await service.pollDueChallenges();
 
-      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(4); // 2 desafios x 2 jogadores, não 8
+      expect(matchmakingService.emitToUser).toHaveBeenCalledTimes(4);
     });
 
     it('nunca emite quando a partida não está mais active', async () => {
@@ -421,7 +413,7 @@ describe('ChallengeSchedulerService', () => {
       const emittedForPlayer1 = matchmakingService.emitToUser.mock.calls.filter(
         (call) => call[0] === 'player-1',
       );
-      expect(emittedForPlayer1).toHaveLength(1); // não 2
+      expect(emittedForPlayer1).toHaveLength(1);
     });
   });
 });

@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 
-import { createWsClient, type WsClient } from "@/lib/ws-client";
+import { createWsClient, type WsClient } from '@/lib/ws-client';
 
-import { useAuth } from "./auth-provider";
+import { useAuth } from './auth-provider';
 
 const SocketContext = React.createContext<WsClient | null>(null);
 
@@ -13,7 +13,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [client, setClient] = React.useState<WsClient | null>(null);
 
   React.useEffect(() => {
-    if (status !== "authenticated" || !accessToken) {
+    if (status !== 'authenticated' || !accessToken) {
       setClient(null);
       return;
     }
@@ -30,7 +30,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   return <SocketContext.Provider value={client}>{children}</SocketContext.Provider>;
 }
 
-/** Retorna `null` até haver sessão autenticada — o socket só conecta com token válido. */
 export function useSocket(): WsClient | null {
   return React.useContext(SocketContext);
 }

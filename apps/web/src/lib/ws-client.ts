@@ -1,7 +1,7 @@
-import { io, type Socket } from "socket.io-client";
-import { WsEventSchemas, type WsEventName, type WsEventPayload } from "@aurafarming/shared";
+import { io, type Socket } from 'socket.io-client';
+import { WsEventSchemas, type WsEventName, type WsEventPayload } from '@aurafarming/shared';
 
-import { getWsUrl } from "./env";
+import { getWsUrl } from './env';
 
 export type WsClient = {
   readonly socket: Socket;
@@ -23,7 +23,6 @@ export function createWsClient(token: string): WsClient {
       socket.disconnect();
     },
     emit(event, payload) {
-      // Payload sai do nosso próprio código — falha aqui é erro do programador, deve estourar.
       WsEventSchemas[event].parse(payload);
       socket.emit(event, payload);
     },
@@ -36,9 +35,7 @@ export function createWsClient(token: string): WsClient {
         }
         handler(result.data as WsEventPayload<typeof event>);
       };
-      // Socket.IO tipa on/off por literal de evento; nosso wrapper é genérico
-      // sobre WsEventName, então o TS não resolve a condicional — o cast é
-      // seguro porque `wrapped` já valida o payload em runtime via safeParse.
+
       socket.on(event, wrapped as never);
       return () => {
         socket.off(event, wrapped as never);

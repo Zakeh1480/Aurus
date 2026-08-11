@@ -4,7 +4,6 @@ import { ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH } from '../constants.js';
 import { AuraFeaturesSchema } from '../dtos/aura-features.dto.js';
 import { MatchResultSchema } from '../dtos/match-result.dto.js';
 
-/** server → ambos jogadores */
 export const MatchStartPayloadSchema = z.object({
   matchId: z.uuid(),
   player1Id: z.uuid(),
@@ -13,11 +12,6 @@ export const MatchStartPayloadSchema = z.object({
 });
 export type MatchStartPayload = z.infer<typeof MatchStartPayloadSchema>;
 
-/**
- * client → server. `nonce`/`signature` ligam o pacote à sessão
- * (matchId+userId) e impedem replay (Prompt 6b) — ver AntiCheatModule
- * (apps/api) para o formato exato assinado.
- */
 export const MatchFeaturesPayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
@@ -27,7 +21,6 @@ export const MatchFeaturesPayloadSchema = z.object({
 });
 export type MatchFeaturesPayload = z.infer<typeof MatchFeaturesPayloadSchema>;
 
-/** server → ambos jogadores */
 export const MatchScoreTickPayloadSchema = z.object({
   matchId: z.uuid(),
   tickAt: z.iso.datetime(),
@@ -42,12 +35,6 @@ export const MatchScoreTickPayloadSchema = z.object({
 });
 export type MatchScoreTickPayload = z.infer<typeof MatchScoreTickPayloadSchema>;
 
-/**
- * server → client. Formato final do anti-cheat (Prompt 6b) — `challengeType`
- * hoje só tem "snapshot" (pull de frame direto do LiveKit egress é stretch
- * goal do prompt original, não implementado). `nonce` liga a resposta do
- * cliente (match:verify-response) a este desafio específico.
- */
 export const MatchVerifyChallengePayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
@@ -59,12 +46,6 @@ export const MatchVerifyChallengePayloadSchema = z.object({
 });
 export type MatchVerifyChallengePayload = z.infer<typeof MatchVerifyChallengePayloadSchema>;
 
-/**
- * client → server. Resposta a match:verify-challenge — snapshot único
- * (keyframe) + features reivindicadas para aquele instante + assinatura
- * HMAC (Prompt 6b). O AntiCheatModule reencaminha para POST /verify no
- * serviço de IA depois de validar nonce+assinatura.
- */
 export const MatchVerifyResponsePayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),
@@ -77,7 +58,6 @@ export const MatchVerifyResponsePayloadSchema = z.object({
 });
 export type MatchVerifyResponsePayload = z.infer<typeof MatchVerifyResponsePayloadSchema>;
 
-/** server → ambos jogadores */
 export const MatchEndPayloadSchema = z.object({
   matchId: z.uuid(),
   endedAt: z.iso.datetime(),
@@ -85,11 +65,9 @@ export const MatchEndPayloadSchema = z.object({
 });
 export type MatchEndPayload = z.infer<typeof MatchEndPayloadSchema>;
 
-/** server → ambos jogadores — reaproveita MatchResultSchema, não redeclara. */
 export const MatchResultPayloadSchema = MatchResultSchema;
 export type MatchResultPayload = z.infer<typeof MatchResultPayloadSchema>;
 
-/** client → server. Desistência voluntária de uma partida ativa. */
 export const MatchForfeitPayloadSchema = z.object({
   matchId: z.uuid(),
   userId: z.uuid(),

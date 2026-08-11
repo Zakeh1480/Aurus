@@ -1,7 +1,3 @@
-"""Testes isolados de RateLimitMiddleware — app Starlette mínimo, sem
-depender da app real (que usa o default de 1200 req/60s, alto demais para
-testar o comportamento de forma rápida e determinística)."""
-
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
@@ -16,8 +12,12 @@ async def _ok(request: Request) -> PlainTextResponse:
 
 
 def _build_client(max_requests: int, window_seconds: int) -> TestClient:
-    app = Starlette(routes=[Route("/score", _ok, methods=["POST"]), Route("/health", _ok, methods=["GET"])])
-    app.add_middleware(RateLimitMiddleware, max_requests=max_requests, window_seconds=window_seconds)
+    app = Starlette(
+        routes=[Route("/score", _ok, methods=["POST"]), Route("/health", _ok, methods=["GET"])]
+    )
+    app.add_middleware(
+        RateLimitMiddleware, max_requests=max_requests, window_seconds=window_seconds
+    )
     return TestClient(app)
 
 

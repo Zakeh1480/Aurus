@@ -1,14 +1,8 @@
-import { Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 
-import { PrismaService } from "../prisma/prisma.service";
-import { getModerationBootstrapEmails } from "./moderation.constants";
+import { PrismaService } from '../prisma/prisma.service';
+import { getModerationBootstrapEmails } from './moderation.constants';
 
-/**
- * Promove idempotentemente os e-mails de MODERATION_BOOTSTRAP_EMAILS a
- * `role: "moderator"` na subida da API — único mecanismo de bootstrap do
- * MVP (sem UI de promoção; ver docs/security-checklist.md). Nunca rebaixa
- * um moderador já existente que saia da lista.
- */
 @Injectable()
 export class RoleBootstrapService implements OnModuleInit {
   private readonly logger = new Logger(RoleBootstrapService.name);
@@ -20,11 +14,13 @@ export class RoleBootstrapService implements OnModuleInit {
     if (emails.length === 0) return;
 
     const result = await this.prisma.user.updateMany({
-      where: { email: { in: emails }, role: "user" },
-      data: { role: "moderator" },
+      where: { email: { in: emails }, role: 'user' },
+      data: { role: 'moderator' },
     });
     if (result.count > 0) {
-      this.logger.log(`${result.count} usuário(s) promovido(s) a moderator via MODERATION_BOOTSTRAP_EMAILS.`);
+      this.logger.log(
+        `${result.count} usuário(s) promovido(s) a moderator via MODERATION_BOOTSTRAP_EMAILS.`,
+      );
     }
   }
 }

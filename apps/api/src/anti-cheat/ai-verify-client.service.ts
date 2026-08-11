@@ -1,15 +1,9 @@
-import { type VerifyRequest, type VerifyResponse, VerifyResponseSchema } from "@aurafarming/shared";
-import { Injectable } from "@nestjs/common";
+import { type VerifyRequest, type VerifyResponse, VerifyResponseSchema } from '@aurafarming/shared';
+import { Injectable } from '@nestjs/common';
 
-import { getAiServiceSecret } from "../common/internal-service-secret";
-import { getAntiCheatConfig } from "./anti-cheat.constants";
+import { getAiServiceSecret } from '../common/internal-service-secret';
+import { getAntiCheatConfig } from './anti-cheat.constants';
 
-/**
- * Cliente HTTP mínimo, só para POST /verify no serviço de IA — não é um
- * cliente geral (sem métodos de /score). O Prompt 7 constrói seu próprio
- * cliente para o caminho de scoring principal. Usa fetch/AbortController
- * nativos do Node (>=20.11, já é o piso do monorepo) — sem dependência nova.
- */
 @Injectable()
 export class AiVerifyClientService {
   async verify(request: VerifyRequest): Promise<VerifyResponse> {
@@ -18,8 +12,11 @@ export class AiVerifyClientService {
     const timeout = setTimeout(() => controller.abort(), aiVerifyTimeoutMs);
     try {
       const response = await fetch(`${aiServiceUrl}/verify`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-ai-service-secret": getAiServiceSecret() },
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-ai-service-secret': getAiServiceSecret(),
+        },
         body: JSON.stringify(request),
         signal: controller.signal,
       });

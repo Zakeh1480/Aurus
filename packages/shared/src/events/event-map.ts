@@ -17,7 +17,6 @@ import {
   QueueMatchedPayloadSchema,
 } from './queue.events.js';
 
-/** Mapa evento → schema — única fonte de verdade para todo evento WebSocket. */
 export const WsEventSchemas = {
   'queue:join': QueueJoinPayloadSchema,
   'queue:leave': QueueLeavePayloadSchema,

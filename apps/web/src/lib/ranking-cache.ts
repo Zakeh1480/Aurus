@@ -1,5 +1,5 @@
-import type { InfiniteData } from "@tanstack/react-query";
-import type { RankingEntry, RankingListResponse, RankingMeResponse } from "@aurafarming/shared";
+import type { InfiniteData } from '@tanstack/react-query';
+import type { RankingEntry, RankingListResponse, RankingMeResponse } from '@aurafarming/shared';
 
 export type RankingListPages = InfiniteData<RankingListResponse, number>;
 
@@ -7,12 +7,6 @@ function applyRatingDelta(entry: RankingEntry, ratingDelta: number): RankingEntr
   return { ...entry, rating: entry.rating + ratingDelta, matchesPlayed: entry.matchesPlayed + 1 };
 }
 
-/**
- * Patch otimista pós match:result — soma o ratingDelta e incrementa
- * matchesPlayed, mas deliberadamente não mexe em `rank`: recalcular a
- * posição exigiria saber onde todo mundo está, então quem resolve o rank
- * de verdade é o invalidateQueries que roda logo em seguida.
- */
 export function patchRankingMeCache(
   data: RankingMeResponse | undefined,
   userId: string,

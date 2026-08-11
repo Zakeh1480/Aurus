@@ -1,12 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 
-/**
- * Sem fallback pra `redis://localhost:6379`: nenhum ambiente deste repo
- * configura senha de Redis, então um default silencioso não é hipotético —
- * é uma conexão sem autenticação de verdade caso a env var seja esquecida.
- * Mesmo padrão de falha explícita de `getJwtSecret()`/`getAiServiceSecret()`.
- */
 function getRedisUrl(): string {
   const url = process.env['REDIS_URL'];
   if (!url) {

@@ -19,7 +19,7 @@ import { WsAuthService } from './ws-auth.service';
     MatchmakingGateway,
     WsRateLimiterService,
   ],
-  // Exportado para o LivekitModule reaproveitar endActiveMatch (webhook do LiveKit).
+
   exports: [MatchmakingService],
 })
 export class MatchmakingModule {}

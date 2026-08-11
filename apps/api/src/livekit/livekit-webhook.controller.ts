@@ -14,7 +14,6 @@ import { ScoringService } from '../scoring/scoring.service';
 import { LivekitService } from './livekit.service';
 import { MatchDurationSchedulerService } from './match-duration-scheduler.service';
 
-/** Sem JwtAuthGuard — a autenticação aqui é a assinatura do LiveKit no header Authorization, não um JWT de usuário. */
 @Controller('livekit')
 export class LivekitWebhookController {
   constructor(
@@ -41,11 +40,6 @@ export class LivekitWebhookController {
     }
 
     if (event.event === 'participant_left' && event.room?.name && event.participant?.identity) {
-      // forfeitMatch é idempotente (status !== 'active' vira no-op) — cobre
-      // tanto uma desconexão real no meio da partida (derrota automática de
-      // quem saiu) quanto o participant_left tardio que o próprio deleteRoom
-      // de um encerramento normal (finalizeMatch, duração esgotada) dispara
-      // pros dois lados saindo da room.
       await this.scoringService.forfeitMatch(event.room.name, event.participant.identity);
       await this.livekit.deleteRoom(event.room.name);
       this.matchDurationScheduler.cancel(event.room.name);

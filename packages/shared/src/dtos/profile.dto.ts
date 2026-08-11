@@ -2,11 +2,9 @@ import { z } from 'zod';
 
 export const ProfileSchema = z.object({
   userId: z.uuid(),
-  /** Identidade pública do jogador — pode divergir de User.displayName/avatarUrl. */
+
   nickname: z.string().min(1).max(32),
-  // protocol restrito a http(s) — mesmo motivo de UserSchema.avatarUrl
-  // (user.dto.ts): sem allowlist de scheme, um valor armazenado aceitaria
-  // javascript:/data:/vbscript:.
+
   avatarUrl: z.url({ protocol: /^https?$/ }).nullable(),
   bio: z.string().max(280).nullable(),
   rating: z.number().int().nonnegative(),
@@ -20,10 +18,6 @@ export const ProfileSchema = z.object({
 
 export type Profile = z.infer<typeof ProfileSchema>;
 
-/**
- * Reaproveita os campos editáveis de ProfileSchema, sem redeclarar limites —
- * contract-first (CLAUDE.md, regra 1).
- */
 export const UpdateProfileRequestSchema = z
   .object({
     nickname: ProfileSchema.shape.nickname,

@@ -1,7 +1,5 @@
-import type { RankingEntry, RankingListResponse } from "@aurafarming/shared";
+import type { RankingEntry, RankingListResponse } from '@aurafarming/shared';
 
-/** Achata páginas de useInfiniteQuery numa lista única, sem duplicar por userId
- * (defensivo contra overlap de paginação se o ranking mudar entre fetches). */
 export function flattenRankingPages(pages: RankingListResponse[] | undefined): RankingEntry[] {
   if (!pages) return [];
   const seen = new Set<string>();

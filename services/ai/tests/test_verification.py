@@ -1,5 +1,3 @@
-"""Testes das funções puras de app/verification.py (Prompt 6b)."""
-
 import base64
 from unittest.mock import patch
 
@@ -48,9 +46,7 @@ def test_decode_keyframe_corrupt_image_bytes_raises_value_error() -> None:
 
 
 def test_decode_keyframe_oversized_dimensions_raises_value_error() -> None:
-    """Imagem lisa de 6000x6000 (36MP, acima do teto de 25MP) comprime pra um PNG
-    minúsculo — cabe folgada no limite de tamanho do base64, mas não deveria
-    passar pela guarda de decompression-bomb pós-decode."""
+
     huge_flat_image = make_flat_image(size=6000)
     with pytest.raises(ValueError, match="megapixels"):
         decode_keyframe(encode_image_base64(huge_flat_image))
@@ -72,10 +68,7 @@ def test_detect_face_presence_no_face_on_flat_image() -> None:
 
 
 def test_detect_face_presence_uses_mocked_cascade_for_deterministic_pipeline_tests() -> None:
-    """A acurácia do Haar cascade em imagens sintéticas não vale a pena fixar em
-    teste unitário — é um algoritmo já vetorizado/testado pelo OpenCV. O que
-    este módulo constrói POR CIMA dele (derivação de proxies, discrepancy)
-    precisa ser preciso, então mockamos o cascade para pinar sua saída."""
+
     image = make_noisy_image(size=100)
     with (
         patch("app.verification._FACE_CASCADE") as mock_face_cascade,
@@ -91,34 +84,48 @@ def test_detect_face_presence_uses_mocked_cascade_for_deterministic_pipeline_tes
 
 
 def test_derive_presence_proxy_full_face_area_returns_one() -> None:
-    face = FacePresenceResult(faces_detected=1, largest_face_area_ratio=1.0, eyes_detected_in_largest_face=2)
+    face = FacePresenceResult(
+        faces_detected=1, largest_face_area_ratio=1.0, eyes_detected_in_largest_face=2
+    )
     assert derive_presence_proxy(face, settings=SETTINGS) == 1.0
 
 
 def test_derive_presence_proxy_small_face_area_scales_down() -> None:
     half_threshold = SETTINGS.verify_face_min_area_ratio / 2
-    face = FacePresenceResult(faces_detected=1, largest_face_area_ratio=half_threshold, eyes_detected_in_largest_face=2)
+    face = FacePresenceResult(
+        faces_detected=1, largest_face_area_ratio=half_threshold, eyes_detected_in_largest_face=2
+    )
     assert derive_presence_proxy(face, settings=SETTINGS) == pytest.approx(0.5)
 
 
 def test_derive_presence_proxy_no_face_returns_zero() -> None:
-    face = FacePresenceResult(faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0)
+    face = FacePresenceResult(
+        faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0
+    )
     assert derive_presence_proxy(face, settings=SETTINGS) == 0.0
 
 
 def test_derive_eye_contact_proxy_two_eyes_returns_one() -> None:
-    face = FacePresenceResult(faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=2)
+    face = FacePresenceResult(
+        faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=2
+    )
     assert derive_eye_contact_proxy(face) == 1.0
 
 
 def test_derive_eye_contact_proxy_one_eye_returns_half() -> None:
-    face = FacePresenceResult(faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=1)
+    face = FacePresenceResult(
+        faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=1
+    )
     assert derive_eye_contact_proxy(face) == 0.5
 
 
 def test_derive_eye_contact_proxy_no_eyes_or_no_face_returns_zero() -> None:
-    with_face_no_eyes = FacePresenceResult(faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=0)
-    no_face = FacePresenceResult(faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0)
+    with_face_no_eyes = FacePresenceResult(
+        faces_detected=1, largest_face_area_ratio=0.5, eyes_detected_in_largest_face=0
+    )
+    no_face = FacePresenceResult(
+        faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0
+    )
     assert derive_eye_contact_proxy(with_face_no_eyes) == 0.0
     assert derive_eye_contact_proxy(no_face) == 0.0
 
@@ -128,28 +135,54 @@ def test_discrepancy_dimension_weights_sum_to_one() -> None:
 
 
 def test_compute_discrepancy_zero_when_claims_match_proxies() -> None:
-    face = FacePresenceResult(faces_detected=1, largest_face_area_ratio=SETTINGS.verify_face_min_area_ratio, eyes_detected_in_largest_face=2)
-    claimed = AuraFeatures(**{**{k: 0.5 for k in ("posture", "expression", "movement")}, "presence": 1.0, "eyeContact": 1.0, "sequence": 0, "capturedAt": "2026-01-01T00:00:00.000Z"})
+    face = FacePresenceResult(
+        faces_detected=1,
+        largest_face_area_ratio=SETTINGS.verify_face_min_area_ratio,
+        eyes_detected_in_largest_face=2,
+    )
+    claimed = AuraFeatures(
+        **{
+            **{k: 0.5 for k in ("posture", "expression", "movement")},
+            "presence": 1.0,
+            "eyeContact": 1.0,
+            "sequence": 0,
+            "capturedAt": "2026-01-01T00:00:00.000Z",
+        }
+    )
     discrepancy, confidence = compute_discrepancy(claimed, face, settings=SETTINGS)
     assert discrepancy == pytest.approx(0.0, abs=1e-6)
     assert confidence == pytest.approx(1.0)
 
 
 def test_compute_discrepancy_high_when_claims_dont_match_proxies() -> None:
-    face = FacePresenceResult(faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0)
-    claimed = AuraFeatures(**{**{k: 0.5 for k in ("posture", "expression", "movement")}, "presence": 1.0, "eyeContact": 1.0, "sequence": 0, "capturedAt": "2026-01-01T00:00:00.000Z"})
+    face = FacePresenceResult(
+        faces_detected=0, largest_face_area_ratio=0.0, eyes_detected_in_largest_face=0
+    )
+    claimed = AuraFeatures(
+        **{
+            **{k: 0.5 for k in ("posture", "expression", "movement")},
+            "presence": 1.0,
+            "eyeContact": 1.0,
+            "sequence": 0,
+            "capturedAt": "2026-01-01T00:00:00.000Z",
+        }
+    )
     discrepancy, _confidence = compute_discrepancy(claimed, face, settings=SETTINGS)
     assert discrepancy == pytest.approx(1.0)
 
 
 def test_verify_static_flat_image_flags_static_image_suspected() -> None:
-    request = VerifyRequest(**make_verify_request(keyframeBase64=encode_image_base64(make_flat_image())))
+    request = VerifyRequest(
+        **make_verify_request(keyframeBase64=encode_image_base64(make_flat_image()))
+    )
     response = verify(request)
     assert response.liveness.staticImageSuspected is True
 
 
 def test_verify_noisy_image_does_not_flag_static_image_suspected() -> None:
-    request = VerifyRequest(**make_verify_request(keyframeBase64=encode_image_base64(make_noisy_image())))
+    request = VerifyRequest(
+        **make_verify_request(keyframeBase64=encode_image_base64(make_noisy_image()))
+    )
     response = verify(request)
     assert response.liveness.staticImageSuspected is False
 

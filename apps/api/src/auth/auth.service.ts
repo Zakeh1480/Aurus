@@ -66,10 +66,6 @@ export class AuthService implements OnModuleInit {
     });
 
     if (!user || user.anonymizedAt || user.bansReceived.length > 0) {
-      // Roda um verify contra um hash dummy para manter timing constante,
-      // evitando vazar via latência se o e-mail existe, está anonimizado ou
-      // banido — usuário banido recebe a mesma mensagem genérica que
-      // credenciais inválidas (Prompt 13, nunca revela "você está banido").
       await argon2.verify(await this.getDummyHash(), input.password).catch(() => false);
       throw invalidCredentials;
     }
@@ -96,22 +92,14 @@ export class AuthService implements OnModuleInit {
     }
 
     if (stored.revokedAt) {
-      // Token já rotacionado sendo reapresentado — presume comprometimento
-      // e derruba todas as sessões ativas do usuário (não há `familyId` no
-      // schema para revogação granular por sessão).
       await this.revokeAllUserTokens(stored.userId);
       throw invalid;
     }
 
     if (stored.expiresAt.getTime() < Date.now()) {
-      // Só expirado (nunca revogado) não é sinal de ataque — rejeita sem
-      // derrubar as demais sessões do usuário.
       throw invalid;
     }
 
-    // Claim atômico: só uma requisição concorrente consegue "ganhar" a
-    // rotação. Se outra já reivindicou este token entre o findUnique acima
-    // e este update, count será 0 — tratamos como reuso concorrente.
     const claim = await this.prisma.refreshToken.updateMany({
       where: { id: stored.id, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -144,18 +132,10 @@ export class AuthService implements OnModuleInit {
     });
   }
 
-  /** Usado pelo ModerationModule (Prompt 13) ao banir um usuário — derruba todas as sessões ativas dele. */
   async forceLogout(userId: string): Promise<void> {
     await this.revokeAllUserTokens(userId);
   }
 
-  /**
-   * Usado por UsersService (Prompt 29) depois de trocar senha/e-mail: troca
-   * de credencial é sinal de que outras sessões devem reautenticar, mas a
-   * sessão que acabou de fazer a troca precisa continuar logada — por isso
-   * revoga tudo e já emite um par novo, em vez de só revogar (que deixaria
-   * o próprio usuário deslogado ao trocar a própria senha).
-   */
   async rotateSessionAfterAccountChange(
     userId: string,
   ): Promise<{ tokens: AuthTokens; refreshToken: string }> {

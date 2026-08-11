@@ -13,15 +13,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ScoreSampleBufferService } from './score-sample-buffer.service';
 import { ScoreTickSchedulerService } from './score-tick-scheduler.service';
 
-/**
- * Segundo consumidor independente de match:features, ao lado de
- * AntiCheatGateway (Prompt 6b) — múltiplos gateways sem namespace explícito
- * compartilham o mesmo Server/socket, então o Socket.IO invoca os dois
- * handlers para cada mensagem. Este aqui NÃO revalida HMAC/nonce: é
- * "melhor esforço" para o tick ao vivo. A fonte de verdade sobre validade da
- * partida é AntiCheatService.getMatchDecision, consultada só no encerramento
- * (ScoringService.finalizeMatch) — não aqui.
- */
 @WebSocketGateway()
 export class MatchScoringGateway {
   private readonly logger = new Logger(MatchScoringGateway.name);
@@ -50,7 +41,6 @@ export class MatchScoringGateway {
     this.scoreTickScheduler.ensureScheduledForMatch(payload.matchId);
   }
 
-  /** Nunca confia em payload.userId para autorização — mesmo padrão das outras gateways. */
   private requireUserId(socket: Socket, payloadUserId: string): string {
     const userId = socket.data.userId as string;
     if (payloadUserId !== userId) {

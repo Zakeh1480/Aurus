@@ -48,7 +48,7 @@ function PlayerBreakdown({
               {AURA_METRIC_LABELS[key]}
             </span>
             <Progress value={score.breakdown[key]} />
-            {/* Peso fixo da métrica (fairness, Prompt 13) — contribuição = valor bruto × peso. */}
+
             <span className="w-10 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
               ×{AURA_SCORE_WEIGHTS[key].toFixed(2)}
             </span>

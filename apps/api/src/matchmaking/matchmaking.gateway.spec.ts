@@ -39,8 +39,7 @@ describe('MatchmakingGateway', () => {
       accept: vi.fn().mockResolvedValue(undefined),
       handleDisconnect: vi.fn().mockResolvedValue(undefined),
     };
-    // Default: sempre dentro do limite — testes de rate limiting específicos
-    // sobrescrevem com mockResolvedValueOnce(false) quando necessário.
+
     wsRateLimiter = { allow: vi.fn().mockResolvedValue(true) };
 
     const moduleRef = await Test.createTestingModule({

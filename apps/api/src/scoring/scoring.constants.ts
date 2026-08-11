@@ -8,11 +8,6 @@ export interface ScoringConfig {
   eloKFactor: number;
 }
 
-/**
- * Sem @nestjs/config (convenção do repo — ver anti-cheat.constants.ts /
- * matchmaking.constants.ts): lê process.env diretamente, chamado sempre em
- * tempo de execução (nunca no import de módulo).
- */
 export function getScoringConfig(): ScoringConfig {
   return {
     aiServiceUrl: process.env['AI_SERVICE_URL'] ?? 'http://localhost:8000',

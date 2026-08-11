@@ -1,20 +1,23 @@
-import type { VerifyResponse } from "@aurafarming/shared";
-import { Test } from "@nestjs/testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { VerifyResponse } from '@aurafarming/shared';
+import { Test } from '@nestjs/testing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PrismaService } from "../prisma/prisma.service";
-import { RedisService } from "../redis/redis.service";
-import { TrustScoreService } from "./trust-score.service";
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { TrustScoreService } from './trust-score.service';
 
-const MATCH_ID = "123e4567-e89b-12d3-a456-426614174000";
-const USER_A = "223e4567-e89b-12d3-a456-426614174001";
-const USER_B = "323e4567-e89b-12d3-a456-426614174002";
+const MATCH_ID = '123e4567-e89b-12d3-a456-426614174000';
+const USER_A = '223e4567-e89b-12d3-a456-426614174001';
+const USER_B = '323e4567-e89b-12d3-a456-426614174002';
 
-function verifyResponse(overrides: Partial<VerifyResponse["liveness"]> = {}, discrepancy = 0.05): VerifyResponse {
+function verifyResponse(
+  overrides: Partial<VerifyResponse['liveness']> = {},
+  discrepancy = 0.05,
+): VerifyResponse {
   return {
     matchId: MATCH_ID,
     userId: USER_A,
-    challengeId: "challenge-1",
+    challengeId: 'challenge-1',
     discrepancy,
     discrepancyConfidence: 1.0,
     liveness: {
@@ -24,12 +27,12 @@ function verifyResponse(overrides: Partial<VerifyResponse["liveness"]> = {}, dis
       multipleFacesDetected: false,
       ...overrides,
     },
-    version: "anti-cheat-v1",
-    computedAt: "2026-01-01T00:00:00.000Z",
+    version: 'anti-cheat-v1',
+    computedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
-describe("TrustScoreService", () => {
+describe('TrustScoreService', () => {
   let redis: {
     hincrby: ReturnType<typeof vi.fn>;
     hincrbyfloat: ReturnType<typeof vi.fn>;
@@ -60,9 +63,8 @@ describe("TrustScoreService", () => {
     };
     prisma = {
       match: { findUniqueOrThrow: vi.fn() },
-      // id retornado é consumido por persistIncidentIfNeeded para o upsert
-      // idempotente do Report auto-gerado (antiCheatIncidentId, Prompt 13).
-      antiCheatIncident: { upsert: vi.fn().mockResolvedValue({ id: "incident-1" }) },
+
+      antiCheatIncident: { upsert: vi.fn().mockResolvedValue({ id: 'incident-1' }) },
       report: { upsert: vi.fn() },
     };
     const moduleRef = await Test.createTestingModule({
@@ -75,15 +77,15 @@ describe("TrustScoreService", () => {
     service = moduleRef.get(TrustScoreService);
   });
 
-  describe("assessParticipant", () => {
-    it("nenhum sinal registrado ainda: trust alto (neutro), decisão válida", async () => {
+  describe('assessParticipant', () => {
+    it('nenhum sinal registrado ainda: trust alto (neutro), decisão válida', async () => {
       const assessment = await service.assessParticipant(MATCH_ID, USER_A);
-      expect(assessment.trustLevel).toBe("high");
-      expect(assessment.decision).toBe("valid");
+      expect(assessment.trustLevel).toBe('high');
+      expect(assessment.decision).toBe('valid');
       expect(assessment.discrepancyAvg).toBeNull();
     });
 
-    it("discrepância alta + flags de liveness ruins: trust baixo, decisão descartada", async () => {
+    it('discrepância alta + flags de liveness ruins: trust baixo, decisão descartada', async () => {
       await service.recordChallengeIssued(MATCH_ID, USER_A);
       await service.recordVerifyResult(
         MATCH_ID,
@@ -92,15 +94,11 @@ describe("TrustScoreService", () => {
       );
 
       const assessment = await service.assessParticipant(MATCH_ID, USER_A);
-      expect(assessment.trustLevel).toBe("low");
-      expect(assessment.decision).toBe("discarded");
+      expect(assessment.trustLevel).toBe('low');
+      expect(assessment.decision).toBe('discarded');
     });
 
-    it("pacotes de features majoritariamente rejeitados (assinatura errada): penaliza o trust, mas isoladamente não é suficiente para descartar", async () => {
-      // Pesos deliberados (discrepancy 0.35 + liveness 0.30 dominam como sinal
-      // primário de forjamento; rejected é evidência de suporte, não a prova
-      // sozinha — um ataque real tende a falhar discrepancy/liveness também,
-      // como no teste acima).
+    it('pacotes de features majoritariamente rejeitados (assinatura errada): penaliza o trust, mas isoladamente não é suficiente para descartar', async () => {
       const baseline = await service.assessParticipant(MATCH_ID, USER_A);
       for (let i = 0; i < 10; i += 1) {
         await service.recordRejectedPacket(MATCH_ID, USER_A);
@@ -110,7 +108,7 @@ describe("TrustScoreService", () => {
       expect(assessment.trustScore).toBeLessThan(baseline.trustScore);
     });
 
-    it("violações temporais repetidas penalizam o trust, mas isoladamente não é suficiente para descartar", async () => {
+    it('violações temporais repetidas penalizam o trust, mas isoladamente não é suficiente para descartar', async () => {
       const baseline = await service.assessParticipant(MATCH_ID, USER_A);
       for (let i = 0; i < 10; i += 1) {
         await service.recordAcceptedPacket(MATCH_ID, USER_A, true);
@@ -120,7 +118,7 @@ describe("TrustScoreService", () => {
       expect(assessment.trustScore).toBeLessThan(baseline.trustScore);
     });
 
-    it("tudo limpo (desafios respondidos sem flags, sem pacotes rejeitados): decisão válida", async () => {
+    it('tudo limpo (desafios respondidos sem flags, sem pacotes rejeitados): decisão válida', async () => {
       await service.recordChallengeIssued(MATCH_ID, USER_A);
       await service.recordChallengeIssued(MATCH_ID, USER_A);
       await service.recordVerifyResult(MATCH_ID, USER_A, verifyResponse({}, 0.02));
@@ -129,15 +127,18 @@ describe("TrustScoreService", () => {
       await service.recordAcceptedPacket(MATCH_ID, USER_A, false);
 
       const assessment = await service.assessParticipant(MATCH_ID, USER_A);
-      expect(assessment.decision).toBe("valid");
+      expect(assessment.decision).toBe('valid');
     });
   });
 
-  describe("getMatchDecision", () => {
-    it("overallDecision é o pior caso entre os dois participantes, e só o descartado gera incidente", async () => {
-      prisma.match.findUniqueOrThrow.mockResolvedValue({ id: MATCH_ID, player1Id: USER_A, player2Id: USER_B });
+  describe('getMatchDecision', () => {
+    it('overallDecision é o pior caso entre os dois participantes, e só o descartado gera incidente', async () => {
+      prisma.match.findUniqueOrThrow.mockResolvedValue({
+        id: MATCH_ID,
+        player1Id: USER_A,
+        player2Id: USER_B,
+      });
 
-      // USER_A: limpo (válido). USER_B: forjado (descartado).
       await service.recordChallengeIssued(MATCH_ID, USER_B);
       await service.recordVerifyResult(
         MATCH_ID,
@@ -148,10 +149,10 @@ describe("TrustScoreService", () => {
       const result = await service.getMatchDecision(MATCH_ID);
 
       expect(result.player1.userId).toBe(USER_A);
-      expect(result.player1.decision).toBe("valid");
+      expect(result.player1.decision).toBe('valid');
       expect(result.player2.userId).toBe(USER_B);
-      expect(result.player2.decision).toBe("discarded");
-      expect(result.overallDecision).toBe("discarded");
+      expect(result.player2.decision).toBe('discarded');
+      expect(result.overallDecision).toBe('discarded');
 
       expect(prisma.antiCheatIncident.upsert).toHaveBeenCalledTimes(1);
       expect(prisma.antiCheatIncident.upsert).toHaveBeenCalledWith(
@@ -160,28 +161,30 @@ describe("TrustScoreService", () => {
         }),
       );
 
-      // Prompt 13: incidente não-"valid" auto-gera uma entrada na fila de
-      // moderação, chaveada pelo id do incidente (upsert idempotente).
       expect(prisma.report.upsert).toHaveBeenCalledTimes(1);
       expect(prisma.report.upsert).toHaveBeenCalledWith({
-        where: { antiCheatIncidentId: "incident-1" },
+        where: { antiCheatIncidentId: 'incident-1' },
         create: expect.objectContaining({
           reportedId: USER_B,
           matchId: MATCH_ID,
-          antiCheatIncidentId: "incident-1",
-          source: "anti_cheat",
-          reason: "cheating",
+          antiCheatIncidentId: 'incident-1',
+          source: 'anti_cheat',
+          reason: 'cheating',
         }),
         update: {},
       });
     });
 
-    it("quando ambos são válidos, nenhum incidente nem report são persistidos", async () => {
-      prisma.match.findUniqueOrThrow.mockResolvedValue({ id: MATCH_ID, player1Id: USER_A, player2Id: USER_B });
+    it('quando ambos são válidos, nenhum incidente nem report são persistidos', async () => {
+      prisma.match.findUniqueOrThrow.mockResolvedValue({
+        id: MATCH_ID,
+        player1Id: USER_A,
+        player2Id: USER_B,
+      });
 
       const result = await service.getMatchDecision(MATCH_ID);
 
-      expect(result.overallDecision).toBe("valid");
+      expect(result.overallDecision).toBe('valid');
       expect(prisma.antiCheatIncident.upsert).not.toHaveBeenCalled();
       expect(prisma.report.upsert).not.toHaveBeenCalled();
     });

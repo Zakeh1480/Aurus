@@ -1,9 +1,8 @@
-import * as React from "react";
+import * as React from 'react';
 
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
 
-type ProgressProps = React.ComponentProps<"div"> & {
-  /** 0-1 — as métricas do Aura Score já chegam normalizadas nessa escala. */
+type ProgressProps = React.ComponentProps<'div'> & {
   value: number;
 };
 
@@ -17,7 +16,7 @@ function Progress({ className, value, ...props }: ProgressProps) {
       aria-valuenow={Math.round(clamped * 100)}
       aria-valuemin={0}
       aria-valuemax={100}
-      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-muted", className)}
+      className={cn('relative h-2 w-full overflow-hidden rounded-full bg-muted', className)}
       {...props}
     >
       <div

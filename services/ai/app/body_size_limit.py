@@ -1,13 +1,3 @@
-"""Middleware de limite de tamanho de corpo de requisição (Prompt 16).
-
-Nada no FastAPI/Starlette limita o tamanho de um corpo de requisição por
-padrão — o corpo inteiro é bufferizado em memória antes de qualquer
-validação Pydantic rodar. Checagem via header `Content-Length`: tráfego aqui
-é sempre server-to-server (apps/api -> services/ai), e todo cliente HTTP
-padrão declara esse header — não cobre um corpo chunked sem `Content-Length`
-declarado, mas isso não é como este serviço é chamado hoje.
-"""
-
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response

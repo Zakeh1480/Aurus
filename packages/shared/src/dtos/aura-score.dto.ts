@@ -1,8 +1,7 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { AURA_SCORE_VERSION } from "../constants.js";
+import { AURA_SCORE_VERSION } from '../constants.js';
 
-/** Saída da função pura de scoring `score = f(features, AURA_SCORE_VERSION)`. */
 export const AuraScoreSchema = z.object({
   overall: z.number().min(0).max(1),
   breakdown: z.object({

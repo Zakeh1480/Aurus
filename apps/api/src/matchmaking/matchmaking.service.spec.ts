@@ -35,13 +35,6 @@ interface RecordedEmit {
   payload: unknown;
 }
 
-/**
- * Simula só o suficiente da API do `Server` do Socket.IO usada por
- * `MatchmakingService` (`to(room).emit(...)`, `in(room).disconnectSockets(...)`)
- * — sem um servidor Socket.IO real nem o adapter Redis, já que o que importa
- * aqui é *qual* room recebeu *qual* evento, não a entrega de fato (isso é
- * responsabilidade do socket.io-redis-adapter, não desta unit).
- */
 function fakeServer() {
   const recorded: RecordedEmit[] = [];
   const disconnectedRooms: string[] = [];
@@ -66,13 +59,6 @@ interface FakePendingEntry {
   expiresAtMs: number;
 }
 
-/**
- * Reimplementa as 5 operações de `PendingMatchService` com um `Map` local em vez de
- * `mockResolvedValueOnce` por chamada — os testes de accept/timeout/desconexão exercitam
- * transições de estado reais (segundo accept vê as duas flags, claimAndCancel é idempotente de
- * verdade) em vez de depender de acertar manualmente a sequência de retornos mockados para cada
- * branch. `pending-match.service.spec.ts` cobre a implementação real (Redis/Lua) à parte.
- */
 function fakePendingMatchService() {
   const byMatchId = new Map<string, FakePendingEntry>();
   const byUserId = new Map<string, string>();
@@ -217,7 +203,6 @@ describe('MatchmakingService', () => {
     vi.restoreAllMocks();
   });
 
-  /** Pareia user-a (já esperando) com user-b (quem dispara o pareamento). */
   async function setupPendingMatch(
     matchId = 'match-1',
     createdAt = new Date('2026-01-01T00:00:00.000Z'),
@@ -241,9 +226,6 @@ describe('MatchmakingService', () => {
     });
     await service.join('user-b');
 
-    // O "arrange" acima já disparou addToQueue/leaveQueue como parte normal
-    // do join — zera o histórico de chamadas para os testes de accept/
-    // timeout/desconexão observarem só o que acontece na fase de "act".
     queueService.addToQueue.mockClear();
     queueService.leaveQueue.mockClear();
 
@@ -400,8 +382,6 @@ describe('MatchmakingService', () => {
         payload: expectedStartPayload,
       });
 
-      // Um poll que rodasse depois do timeout original não encontra mais nada pra cancelar —
-      // accept já removeu a entrada do PendingMatchService.
       dateNowSpy.mockReturnValue(baseTime + 60_000);
       await service.pollExpiredPendingMatches();
       expect(prisma.match.update).toHaveBeenCalledTimes(1);

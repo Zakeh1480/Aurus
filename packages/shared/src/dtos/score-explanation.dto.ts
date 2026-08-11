@@ -1,15 +1,8 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { AURA_METRIC_KEYS } from "../constants.js";
-import { AuraScoreSchema } from "./aura-score.dto.js";
+import { AURA_METRIC_KEYS } from '../constants.js';
+import { AuraScoreSchema } from './aura-score.dto.js';
 
-/**
- * Resposta de GET /matches/:id/score-explanation — não altera AuraScoreSchema
- * nem MatchResultSchema (congelados pelo contrato WS `match:result`
- * existente); envolve o breakdown bruto com peso/contribuição por métrica
- * (AURA_SCORE_WEIGHTS) para permitir contestação de resultado (fairness,
- * Prompt 13).
- */
 const MetricExplanationSchema = z.object({
   key: z.enum(AURA_METRIC_KEYS),
   raw: z.number().min(0).max(1),

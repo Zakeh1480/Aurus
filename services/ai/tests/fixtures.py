@@ -1,5 +1,3 @@
-"""Builders únicos de AuraFeatures/VerifyRequest, reusados em testes puros e testes HTTP."""
-
 import base64
 from typing import Any
 
@@ -22,12 +20,12 @@ def make_features(**overrides: Any) -> dict[str, Any]:
 
 
 def make_flat_image(size: int = 200, color: int = 128) -> np.ndarray:
-    """Imagem sem nenhuma textura — proxy de foto estática/impressa/tela lisa."""
+
     return np.full((size, size, 3), color, dtype=np.uint8)
 
 
 def make_noisy_image(size: int = 200, seed: int = 42) -> np.ndarray:
-    """Imagem com ruído aleatório — proxy de captura de câmera real (alta variância de Laplaciano)."""
+
     rng = np.random.default_rng(seed)
     return rng.integers(0, 255, (size, size, 3), dtype=np.uint8).astype(np.uint8)
 

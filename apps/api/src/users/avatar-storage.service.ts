@@ -12,11 +12,6 @@ interface AvatarStorageConfig {
   publicBaseUrl: string;
 }
 
-/**
- * Lê a config só quando o upload é de fato chamado — diferente do LiveKit
- * (instanciado eagerly no boot), avatar não deveria travar o boot da API
- * inteira em ambientes que ainda não configuraram um storage de objetos.
- */
 function getAvatarStorageConfig(): AvatarStorageConfig {
   const endpoint = process.env['AVATAR_STORAGE_ENDPOINT'];
   const bucket = process.env['AVATAR_STORAGE_BUCKET'];
@@ -38,13 +33,6 @@ function getAvatarStorageConfig(): AvatarStorageConfig {
   };
 }
 
-/**
- * Cliente S3-compatible (funciona com Cloudflare R2, S3 de verdade, MinIO
- * etc. sem prender a um vendor específico) — credenciais reais são trilha
- * humana, mesmo padrão de LIVEKIT_* e AI_SERVICE_SHARED_SECRET (.env.example).
- * Sem limpeza do objeto antigo ao substituir — limitação conhecida, mesmo
- * espírito do crescimento aceito do Container Registry (CLAUDE.md).
- */
 @Injectable()
 export class AvatarStorageService {
   async upload(userId: string, buffer: Buffer, mimeType: string): Promise<string> {

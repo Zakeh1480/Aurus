@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 
 FROM python:3.12-slim AS builder
 
@@ -9,7 +8,6 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
-# Camada de dependências separada do código-fonte para cache de build eficiente.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
@@ -17,17 +15,11 @@ COPY app ./app
 
 FROM python:3.12-slim AS runtime
 
-# opencv-python-headless (Prompt 6b, POST /verify) precisa dessas libs de
-# sistema em RUNTIME — sem isso, `import cv2` falha com "ImportError:
-# libGL.so.1". Não são necessárias no stage builder (instalar o pacote via
-# `uv sync` não importa cv2), só aqui. Camada isolada, cacheável.
 RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Só o venv já resolvido e o código da aplicação — uv/uvx, pyproject.toml,
-# uv.lock e o cache de build do uv ficam para trás no stage builder.
 COPY --from=builder /app/.venv ./.venv
 COPY --from=builder /app/app ./app
 

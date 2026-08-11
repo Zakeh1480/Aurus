@@ -1,16 +1,3 @@
-"""Middleware de rate limiting por IP (Prompt 28).
-
-`services/ai` é server-to-server só (apps/api -> services/ai), protegido pelo
-segredo compartilhado (X-AI-Service-Secret) — mas nada aqui limitava volume
-de requisições: se o segredo vazar, ou se apps/api tiver um bug de loop, nada
-neste serviço freia isso. Janela fixa em memória (sem Redis, ao contrário do
-WsRateLimiterService de apps/api) — aceitável como defesa em profundidade
-porque o chamador de fato é sempre apps/api, não um público amplo de IPs
-diferentes; não é cross-instance-safe se este serviço rodar com múltiplas
-réplicas (cada réplica conta separado), mas ainda é um teto real contra
-volume anômalo vindo de um único caller.
-"""
-
 import time
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint

@@ -1,30 +1,22 @@
 #!/usr/bin/env node
-// Gate de severidade (Prompt 25) — falha o pipeline quando SAST, Secret
-// Detection, Dependency Scanning ou Container Scanning encontram algo igual
-// ou acima de SECURITY_GATE_MIN_SEVERITY. Os templates gerenciados do
-// GitLab (Security/*.gitlab-ci.yml) só anotam a MR por padrão — bloquear de
-// verdade exigiria GitLab Ultimate; este script é a alternativa gratuita
-// (docs/security-checklist.md tem o detalhe do mecanismo).
-//
-// Sem dependências — roda com `node scripts/check-security-reports.mjs`.
 
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
-const SEVERITY_ORDER = ["Info", "Unknown", "Low", "Medium", "High", "Critical"];
+const SEVERITY_ORDER = ['Info', 'Unknown', 'Low', 'Medium', 'High', 'Critical'];
 
 const REPORT_FILES = [
-  "gl-sast-report.json",
-  "gl-secret-detection-report.json",
-  "gl-dependency-scanning-report.json",
-  "gl-container-scanning-report.json",
+  'gl-sast-report.json',
+  'gl-secret-detection-report.json',
+  'gl-dependency-scanning-report.json',
+  'gl-container-scanning-report.json',
 ];
 
-const ALLOWLIST_FILE = ".security-gate-allowlist.json";
+const ALLOWLIST_FILE = '.security-gate-allowlist.json';
 
 function severityRank(severity) {
   const index = SEVERITY_ORDER.indexOf(severity);
-  return index === -1 ? SEVERITY_ORDER.indexOf("Unknown") : index;
+  return index === -1 ? SEVERITY_ORDER.indexOf('Unknown') : index;
 }
 
 function loadAllowlist(projectDir) {
@@ -32,7 +24,7 @@ function loadAllowlist(projectDir) {
   if (!existsSync(path)) {
     return new Set();
   }
-  const raw = JSON.parse(readFileSync(path, "utf8"));
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
   if (!Array.isArray(raw)) {
     throw new Error(`${ALLOWLIST_FILE} deve ser um array de ids de vulnerabilidade`);
   }
@@ -45,7 +37,7 @@ function loadReport(projectDir, filename) {
     console.log(`(skip) ${filename} não encontrado — job correspondente não rodou nesse pipeline`);
     return [];
   }
-  const raw = JSON.parse(readFileSync(path, "utf8"));
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
   const vulnerabilities = Array.isArray(raw.vulnerabilities) ? raw.vulnerabilities : [];
   console.log(`${filename}: ${vulnerabilities.length} achado(s) no relatório`);
   return vulnerabilities.map((v) => ({ ...v, _report: filename }));
@@ -53,27 +45,33 @@ function loadReport(projectDir, filename) {
 
 function formatFinding(v) {
   const location = v.location?.file
-    ? `${v.location.file}${v.location.start_line ? `:${v.location.start_line}` : ""}`
-    : v.location?.dependency?.package?.name ?? v.location?.image ?? "-";
+    ? `${v.location.file}${v.location.start_line ? `:${v.location.start_line}` : ''}`
+    : (v.location?.dependency?.package?.name ?? v.location?.image ?? '-');
   return `[${v.severity}] ${v._report} — ${v.name ?? v.message ?? v.id} (${location})`;
 }
 
 function main() {
   const projectDir = process.env.CI_PROJECT_DIR ?? process.cwd();
-  const minSeverity = process.env.SECURITY_GATE_MIN_SEVERITY ?? "High";
+  const minSeverity = process.env.SECURITY_GATE_MIN_SEVERITY ?? 'High';
   const minRank = severityRank(minSeverity);
 
   const allowlist = loadAllowlist(projectDir);
   const all = REPORT_FILES.flatMap((filename) => loadReport(projectDir, filename));
 
   const allowlisted = all.filter((v) => v.id && allowlist.has(v.id));
-  const belowThreshold = all.filter((v) => !allowlisted.includes(v) && severityRank(v.severity) < minRank);
-  const failures = all.filter((v) => !allowlisted.includes(v) && severityRank(v.severity) >= minRank);
+  const belowThreshold = all.filter(
+    (v) => !allowlisted.includes(v) && severityRank(v.severity) < minRank,
+  );
+  const failures = all.filter(
+    (v) => !allowlisted.includes(v) && severityRank(v.severity) >= minRank,
+  );
 
   if (allowlisted.length > 0) {
     console.log(`\n${allowlisted.length} achado(s) ignorado(s) via ${ALLOWLIST_FILE}.`);
   }
-  console.log(`${belowThreshold.length} achado(s) abaixo do threshold "${minSeverity}" (informativo, não bloqueia).`);
+  console.log(
+    `${belowThreshold.length} achado(s) abaixo do threshold "${minSeverity}" (informativo, não bloqueia).`,
+  );
 
   if (failures.length === 0) {
     console.log(`\nNenhum achado >= "${minSeverity}" encontrado. Gate passou.`);

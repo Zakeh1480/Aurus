@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import type { VariantProps } from "class-variance-authority";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { ReportReasonSchema, type ReportReason } from "@aurafarming/shared";
+import * as React from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
+import type { VariantProps } from 'class-variance-authority';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { ReportReasonSchema, type ReportReason } from '@aurafarming/shared';
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button, type buttonVariants } from "@/components/ui/button";
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button, type buttonVariants } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -18,11 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { FormField } from "@/components/ui/form-field";
-import { Textarea } from "@/components/ui/textarea";
-import { reportsApi } from "@/lib/api-client";
-import { REPORT_REASON_LABELS } from "@/lib/moderation-labels";
+} from '@/components/ui/dialog';
+import { FormField } from '@/components/ui/form-field';
+import { Textarea } from '@/components/ui/textarea';
+import { reportsApi } from '@/lib/api-client';
+import { REPORT_REASON_LABELS } from '@/lib/moderation-labels';
 
 const reportFormSchema = z.object({
   reason: ReportReasonSchema,
@@ -36,21 +36,15 @@ type ReportDialogProps = {
   matchId?: string;
   defaultReason?: ReportReason;
   triggerLabel: string;
-  triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
+  triggerVariant?: VariantProps<typeof buttonVariants>['variant'];
 };
 
-/**
- * Canal de denúncia (Prompt 13) — cobre tanto "reportar jogador" pós-partida
- * quanto "sinalizar conteúdo impróprio" durante a partida (mesmo endpoint,
- * `reason` pré-selecionado difere). Não bloqueia/encerra a partida — só
- * registra um caso para revisão humana assíncrona (fila de moderação).
- */
 export function ReportDialog({
   reportedUserId,
   matchId,
   defaultReason,
   triggerLabel,
-  triggerVariant = "outline",
+  triggerVariant = 'outline',
 }: ReportDialogProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -61,12 +55,17 @@ export function ReportDialog({
     formState: { errors },
   } = useForm<ReportFormValues>({
     resolver: zodResolver(reportFormSchema),
-    defaultValues: { reason: defaultReason ?? "cheating", details: "" },
+    defaultValues: { reason: defaultReason ?? 'cheating', details: '' },
   });
 
   const mutation = useMutation({
     mutationFn: (values: ReportFormValues) =>
-      reportsApi.create({ reportedUserId, matchId, reason: values.reason, details: values.details || undefined }),
+      reportsApi.create({
+        reportedUserId,
+        matchId,
+        reason: values.reason,
+        details: values.details || undefined,
+      }),
     onSuccess: () => {
       setOpen(false);
       reset();
@@ -98,13 +97,17 @@ export function ReportDialog({
 
         {mutation.isSuccess ? (
           <Alert variant="success">
-            <AlertDescription>Denúncia enviada. Obrigado por ajudar a manter a comunidade segura.</AlertDescription>
+            <AlertDescription>
+              Denúncia enviada. Obrigado por ajudar a manter a comunidade segura.
+            </AlertDescription>
           </Alert>
         ) : (
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             {mutation.isError ? (
               <Alert variant="destructive">
-                <AlertDescription>Não foi possível enviar sua denúncia. Tente novamente.</AlertDescription>
+                <AlertDescription>
+                  Não foi possível enviar sua denúncia. Tente novamente.
+                </AlertDescription>
               </Alert>
             ) : null}
 
@@ -112,7 +115,7 @@ export function ReportDialog({
               <select
                 id="reason"
                 className="flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-                {...register("reason")}
+                {...register('reason')}
               >
                 {ReportReasonSchema.options.map((reason) => (
                   <option key={reason} value={reason}>
@@ -122,13 +125,17 @@ export function ReportDialog({
               </select>
             </FormField>
 
-            <FormField label="Detalhes (opcional)" htmlFor="details" error={errors.details?.message}>
-              <Textarea id="details" maxLength={500} rows={3} {...register("details")} />
+            <FormField
+              label="Detalhes (opcional)"
+              htmlFor="details"
+              error={errors.details?.message}
+            >
+              <Textarea id="details" maxLength={500} rows={3} {...register('details')} />
             </FormField>
 
             <DialogFooter>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Enviando…" : "Enviar denúncia"}
+                {mutation.isPending ? 'Enviando…' : 'Enviar denúncia'}
               </Button>
             </DialogFooter>
           </form>

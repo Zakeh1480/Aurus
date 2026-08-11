@@ -5,13 +5,13 @@ import {
   RankingListResponseSchema,
   type RankingMeResponse,
   RankingMeResponseSchema,
-} from "@aurafarming/shared";
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+} from '@aurafarming/shared';
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
-import { PrismaService } from "../prisma/prisma.service";
-import { RedisService } from "../redis/redis.service";
-import { RANKING_ZSET_KEY } from "./ranking.constants";
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { RANKING_ZSET_KEY } from './ranking.constants';
 
 export interface RankingResultEntry {
   userId: string;
@@ -29,14 +29,6 @@ interface SnapshotRow {
   matchesPlayed: number;
 }
 
-/**
- * Redis (sorted set `ranking:global`) é a leitura rápida de GET /ranking;
- * RankingSnapshot no Postgres é o histórico durável e o fallback quando o
- * Redis está vazio/frio — nunca o inverso (schema.prisma documenta essa
- * direção). `rank` nunca vem de uma coluna armazenada: é sempre recalculado
- * pela ordem de leitura, já que o `rank` gravado no snapshot é só um retrato
- * daquele instante e pode ter ficado desatualizado por partidas seguintes.
- */
 @Injectable()
 export class RankingService {
   constructor(
@@ -64,7 +56,10 @@ export class RankingService {
 
   async getRanking(limit: number, offset: number): Promise<RankingListResponse> {
     const total = await this.redis.zcard(RANKING_ZSET_KEY);
-    const entries = total > 0 ? await this.getRankingFromRedis(limit, offset) : await this.getRankingFromPostgres(limit, offset);
+    const entries =
+      total > 0
+        ? await this.getRankingFromRedis(limit, offset)
+        : await this.getRankingFromPostgres(limit, offset);
 
     return RankingListResponseSchema.parse({
       entries,
@@ -75,7 +70,12 @@ export class RankingService {
   }
 
   private async getRankingFromRedis(limit: number, offset: number): Promise<RankingEntry[]> {
-    const raw = await this.redis.zrevrange(RANKING_ZSET_KEY, offset, offset + limit - 1, "WITHSCORES");
+    const raw = await this.redis.zrevrange(
+      RANKING_ZSET_KEY,
+      offset,
+      offset + limit - 1,
+      'WITHSCORES',
+    );
     const userIds: string[] = [];
     const ratingByUser = new Map<string, number>();
     for (let i = 0; i < raw.length; i += 2) {
@@ -94,7 +94,7 @@ export class RankingService {
       return RankingEntrySchema.parse({
         rank: offset + index + 1,
         userId,
-        displayName: profile?.nickname ?? "—",
+        displayName: profile?.nickname ?? '—',
         rating: ratingByUser.get(userId) ?? profile?.rating ?? 0,
         auraScoreAvg: profile?.auraScoreAvg ?? 0,
         matchesPlayed: profile?.matchesPlayed ?? 0,
@@ -136,7 +136,9 @@ export class RankingService {
   async getMyRanking(userId: string): Promise<RankingMeResponse> {
     const zsetTotal = await this.redis.zcard(RANKING_ZSET_KEY);
     const entry =
-      zsetTotal > 0 ? await this.getMyRankingFromRedis(userId) : await this.getMyRankingFromPostgres(userId);
+      zsetTotal > 0
+        ? await this.getMyRankingFromRedis(userId)
+        : await this.getMyRankingFromPostgres(userId);
 
     return RankingMeResponseSchema.parse({ entry });
   }
@@ -151,18 +153,13 @@ export class RankingService {
     return RankingEntrySchema.parse({
       rank: (zRank ?? 0) + 1,
       userId,
-      displayName: profile?.nickname ?? "—",
+      displayName: profile?.nickname ?? '—',
       rating: Number(score),
       auraScoreAvg: profile?.auraScoreAvg ?? 0,
       matchesPlayed: profile?.matchesPlayed ?? 0,
     } satisfies RankingEntry);
   }
 
-  /**
-   * Mesmo cuidado de nível de empate que getRankingFromPostgres: rank é
-   * "quantos têm rating estritamente maior, + 1" — aproximação aceitável
-   * para o fallback frio, não uma classificação oficial de desempate.
-   */
   private async getMyRankingFromPostgres(userId: string): Promise<RankingEntry | null> {
     const rows = await this.prisma.$queryRaw<Array<SnapshotRow & { rank: bigint }>>(Prisma.sql`
       WITH latest AS (

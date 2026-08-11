@@ -162,14 +162,12 @@ describe('ScoringService.finalizeMatch', () => {
 
     prisma = {
       match: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue({
-            id: MATCH_ID,
-            status: 'active',
-            player1Id: PLAYER_1,
-            player2Id: PLAYER_2,
-          }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: MATCH_ID,
+          status: 'active',
+          player1Id: PLAYER_1,
+          player2Id: PLAYER_2,
+        }),
       },
       matchParticipant: {
         findMany: vi.fn().mockResolvedValue([
@@ -237,7 +235,7 @@ describe('ScoringService.finalizeMatch', () => {
     });
     expect(tx.match.update).toHaveBeenCalledWith({
       where: { id: MATCH_ID },
-      // Fairness (Prompt 13): scoreVersion sempre carimbado em todo Match finalizado.
+
       data: expect.objectContaining({
         status: 'completed',
         winnerId: PLAYER_1,
@@ -424,14 +422,12 @@ describe('ScoringService.forfeitMatch', () => {
 
     prisma = {
       match: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValue({
-            id: MATCH_ID,
-            status: 'active',
-            player1Id: PLAYER_1,
-            player2Id: PLAYER_2,
-          }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: MATCH_ID,
+          status: 'active',
+          player1Id: PLAYER_1,
+          player2Id: PLAYER_2,
+        }),
       },
       matchParticipant: {
         findMany: vi.fn().mockResolvedValue([
@@ -485,7 +481,7 @@ describe('ScoringService.forfeitMatch', () => {
         winnerId: PLAYER_2,
       }) as unknown,
     });
-    // auraScoreAvg não muda (fica igual ao valor de antes) — forfeit não julga gameplay.
+
     expect(tx.profile.update).toHaveBeenNthCalledWith(1, {
       where: { userId: PLAYER_1 },
       data: expect.objectContaining({ auraScoreAvg: 0.7, matchesPlayed: 4, losses: 2 }) as unknown,

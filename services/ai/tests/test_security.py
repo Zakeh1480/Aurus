@@ -1,5 +1,3 @@
-"""Testes do segredo compartilhado apps/api <-> services/ai (Prompt 13, Prompt 18)."""
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -60,20 +58,26 @@ def test_score_rejects_when_header_matches_neither_current_nor_previous(
 
 
 def test_score_accepts_any_of_multiple_previous_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AI_SERVICE_SHARED_SECRET_PREVIOUS", "old-secret-1,old-secret-2,old-secret-3")
+    monkeypatch.setenv(
+        "AI_SERVICE_SHARED_SECRET_PREVIOUS", "old-secret-1,old-secret-2,old-secret-3"
+    )
     client = TestClient(app, headers={"X-AI-Service-Secret": "old-secret-2"})
     response = client.post("/score", json=make_features())
     assert response.status_code == 200
 
 
-def test_score_tolerates_whitespace_around_previous_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_score_tolerates_whitespace_around_previous_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("AI_SERVICE_SHARED_SECRET_PREVIOUS", " old-secret-1 , old-secret-2 ")
     client = TestClient(app, headers={"X-AI-Service-Secret": "old-secret-2"})
     response = client.post("/score", json=make_features())
     assert response.status_code == 200
 
 
-def test_score_ignores_empty_entries_in_previous_secrets_list(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_score_ignores_empty_entries_in_previous_secrets_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("AI_SERVICE_SHARED_SECRET_PREVIOUS", "old-secret-1,,old-secret-2")
     client = TestClient(app, headers={"X-AI-Service-Secret": "old-secret-2"})
     response = client.post("/score", json=make_features())

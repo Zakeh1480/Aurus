@@ -1,15 +1,12 @@
-"use client";
+'use client';
 
-import * as React from "react";
+import * as React from 'react';
 
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Cosmético — só dá uma noção visual de urgência ao jogador. A autoridade real
-// sobre o fim da janela de aceite é o servidor (MATCH_ACCEPT_TIMEOUT_MS em
-// apps/api/src/matchmaking/matchmaking.constants.ts), sinalizada via match:end.
 const ACCEPT_COUNTDOWN_SECONDS = 10;
 
 type MatchFoundCardProps = {
@@ -20,7 +17,13 @@ type MatchFoundCardProps = {
   onLeave: () => void;
 };
 
-export function MatchFoundCard({ matchId, opponentId, accepted, onAccept, onLeave }: MatchFoundCardProps) {
+export function MatchFoundCard({
+  matchId,
+  opponentId,
+  accepted,
+  onAccept,
+  onLeave,
+}: MatchFoundCardProps) {
   const [secondsLeft, setSecondsLeft] = React.useState(ACCEPT_COUNTDOWN_SECONDS);
 
   React.useEffect(() => {
@@ -35,7 +38,9 @@ export function MatchFoundCard({ matchId, opponentId, accepted, onAccept, onLeav
     <Card>
       <CardHeader className="items-center text-center">
         <Avatar className="size-16">
-          <AvatarFallback className="text-lg">{opponentId.slice(0, 2).toUpperCase()}</AvatarFallback>
+          <AvatarFallback className="text-lg">
+            {opponentId.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
         </Avatar>
         <CardTitle className="text-xl">Adversário encontrado!</CardTitle>
       </CardHeader>

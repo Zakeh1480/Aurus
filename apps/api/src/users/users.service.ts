@@ -25,8 +25,6 @@ const ANONYMIZED_NICKNAME = 'Jogador removido';
 const ANONYMIZED_DISPLAY_NAME = 'Usuário removido';
 
 function anonymizedEmail(userId: string): string {
-  // Determinístico (chaveado no userId) para que anonimizar duas vezes seja
-  // um no-op idempotente em vez de colidir com a constraint @unique(email).
   return `anon-${userId}@anonymized.aurafarming.local`;
 }
 
@@ -50,8 +48,6 @@ export class UsersService {
       });
       return toProfile(created);
     } catch (error) {
-      // Corrida entre duas primeiras leituras concorrentes: a perdedora só
-      // precisa reler o que a vencedora criou, não é um erro real.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const raced = await this.prisma.profile.findUniqueOrThrow({ where: { userId } });
         return toProfile(raced);
@@ -135,7 +131,6 @@ export class UsersService {
     ]);
   }
 
-  /** Só a verificação/troca de hash — revogar/reemitir sessões é responsabilidade do controller (AuthService). */
   async changePassword(userId: string, input: ChangePasswordRequest): Promise<void> {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const matches = await argon2.verify(user.passwordHash, input.currentPassword);
@@ -161,9 +156,6 @@ export class UsersService {
       });
       return toPublicUser(updated);
     } catch (error) {
-      // Mesma mensagem que o registro usa para e-mail duplicado — não é uma
-      // enumeração nova: quem tenta essa troca já aprenderia o mesmo dado
-      // tentando se cadastrar com o mesmo e-mail.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('E-mail já cadastrado.');
       }

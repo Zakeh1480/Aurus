@@ -84,10 +84,10 @@ describe('MatchDurationSchedulerService', () => {
       );
       expect(redis.zrem).toHaveBeenNthCalledWith(1, DUE_ZSET_KEY, 'match-1');
       expect(redis.zrem).toHaveBeenNthCalledWith(2, DUE_ZSET_KEY, 'match-2');
-      // match-1: ZREM retornou 1 → esta réplica venceu a corrida, dispara fire().
+
       expect(scoringService.finalizeMatch).toHaveBeenCalledWith('match-1');
       expect(livekit.deleteRoom).toHaveBeenCalledWith('match-1');
-      // match-2: ZREM retornou 0 → outra réplica (ou um cancel concorrente) já reivindicou, no-op.
+
       expect(scoringService.finalizeMatch).not.toHaveBeenCalledWith('match-2');
       expect(livekit.deleteRoom).not.toHaveBeenCalledWith('match-2');
     });
@@ -183,7 +183,6 @@ describe('MatchDurationSchedulerService', () => {
     });
 
     it('desconta o tempo já passado quando startedAt é anterior ao agendamento', async () => {
-      // Simula issueToken chamado 40s depois do accept() que carimbou startedAt.
       const startedAt = new Date('2026-01-01T00:00:00.000Z');
       service.scheduleForMatch('match-1', startedAt);
 

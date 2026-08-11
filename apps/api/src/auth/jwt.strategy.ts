@@ -21,9 +21,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<User> {
-    // Consulta o Postgres a cada request (não confia só no payload do JWT)
-    // para invalidar imediatamente contas anonimizadas (LGPD) ou banidas
-    // (Prompt 13) mesmo com access token ainda válido.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       include: { bansReceived: { where: activeBanWhere(), take: 1 } },

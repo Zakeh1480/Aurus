@@ -1,11 +1,5 @@
 export const REFRESH_COOKIE_NAME = 'refresh_token';
 
-/**
- * Fixado explicitamente em todo ponto de verificação (JwtStrategy,
- * WsAuthService) em vez de deixar implícito — hoje `jsonwebtoken` já infere
- * só algoritmos HMAC para uma secretOrKey string, mas isso é um detalhe de
- * implementação da lib, não um controle da aplicação. Defesa em profundidade.
- */
 export const JWT_ALGORITHM = 'HS256';
 
 export function getJwtSecret(): string {
