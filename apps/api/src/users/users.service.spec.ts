@@ -11,6 +11,7 @@ import * as argon2 from 'argon2';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService } from '../security-event/security-event.service';
 import { AvatarStorageService } from './avatar-storage.service';
 import { UsersService } from './users.service';
 
@@ -112,6 +113,7 @@ describe('UsersService', () => {
     $transaction: ReturnType<typeof vi.fn>;
   };
   let avatarStorage: { upload: ReturnType<typeof vi.fn> };
+  let securityEvents: { record: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     prisma = {
@@ -129,12 +131,14 @@ describe('UsersService', () => {
       $transaction: vi.fn((operations: unknown[]) => Promise.all(operations)),
     };
     avatarStorage = { upload: vi.fn() };
+    securityEvents = { record: vi.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         UsersService,
         { provide: PrismaService, useValue: prisma },
         { provide: AvatarStorageService, useValue: avatarStorage },
+        { provide: SecurityEventService, useValue: securityEvents },
       ],
     }).compile();
 
@@ -343,6 +347,7 @@ describe('UsersService', () => {
         }),
       ).rejects.toThrow('Senha atual incorreta.');
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
 
     it('troca o hash quando a senha atual está correta', async () => {
@@ -361,6 +366,11 @@ describe('UsersService', () => {
       });
       const newHash = prisma.user.update.mock.calls[0]![0].data.passwordHash as string;
       expect(await argon2.verify(newHash, 'senha-nova-123')).toBe(true);
+      expect(securityEvents.record).toHaveBeenCalledExactlyOnceWith({
+        type: 'password_changed',
+        userId: 'user-1',
+        metadata: null,
+      });
     });
   });
 
@@ -376,6 +386,7 @@ describe('UsersService', () => {
         }),
       ).rejects.toThrow('Senha atual incorreta.');
       expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
 
     it('atualiza o e-mail quando a senha atual está correta', async () => {
@@ -393,6 +404,11 @@ describe('UsersService', () => {
         data: { email: 'novo@example.com' },
       });
       expect(result.email).toBe('novo@example.com');
+      expect(securityEvents.record).toHaveBeenCalledExactlyOnceWith({
+        type: 'email_changed',
+        userId: 'user-1',
+        metadata: null,
+      });
     });
 
     it('e-mail já em uso: rejeita com mensagem genérica (mesma de RegisterRequest), não vaza detalhe do Prisma', async () => {
@@ -411,6 +427,7 @@ describe('UsersService', () => {
           newEmail: 'ja-existe@example.com',
         }),
       ).rejects.toThrow('E-mail já cadastrado.');
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
   });
 

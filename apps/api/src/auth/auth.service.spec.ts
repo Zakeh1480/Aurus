@@ -11,6 +11,7 @@ import * as argon2 from 'argon2';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService } from '../security-event/security-event.service';
 import { AuthService } from './auth.service';
 import { hashToken } from './token.util';
 
@@ -72,18 +73,21 @@ describe('AuthService', () => {
       updateMany: ReturnType<typeof vi.fn>;
     };
   };
+  let securityEvents: { record: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
     prisma = {
       user: { findUnique: vi.fn(), create: vi.fn() },
       refreshToken: { findUnique: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     };
+    securityEvents = { record: vi.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: new JwtService({ secret: 'test-secret' }) },
+        { provide: SecurityEventService, useValue: securityEvents },
       ],
     }).compile();
 
@@ -150,6 +154,7 @@ describe('AuthService', () => {
       const refreshData = prisma.refreshToken.create.mock.calls[0]![0].data;
       expect(refreshData.tokenHash).toBe(hashToken(result.refreshToken));
       expect(refreshData.tokenHash).not.toBe(result.refreshToken);
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
 
     it('rejeita com a mesma mensagem quando o e-mail não existe', async () => {
@@ -160,6 +165,11 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({
         message: 'Credenciais inválidas.',
       });
+      expect(securityEvents.record).toHaveBeenCalledWith({
+        type: 'login_failed',
+        userId: null,
+        metadata: { reason: 'user_not_found' },
+      });
     });
 
     it('rejeita com a mesma mensagem quando a senha está errada', async () => {
@@ -169,6 +179,11 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'player@example.com', password: 'senha-errada' }),
       ).rejects.toMatchObject({ message: 'Credenciais inválidas.' });
+      expect(securityEvents.record).toHaveBeenCalledWith({
+        type: 'login_failed',
+        userId: 'user-1',
+        metadata: { reason: 'invalid_password' },
+      });
     });
 
     it('rejeita login de usuário anonimizado mesmo com senha correta', async () => {
@@ -180,6 +195,11 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'player@example.com', password: 'senha-correta' }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(securityEvents.record).toHaveBeenCalledWith({
+        type: 'login_failed',
+        userId: 'user-1',
+        metadata: { reason: 'anonymized_account' },
+      });
     });
 
     it('rejeita login de usuário com ban ativo (mesma mensagem genérica)', async () => {
@@ -189,6 +209,11 @@ describe('AuthService', () => {
       await expect(
         authService.login({ email: 'player@example.com', password: 'senha-correta' }),
       ).rejects.toMatchObject({ message: 'Credenciais inválidas.' });
+      expect(securityEvents.record).toHaveBeenCalledWith({
+        type: 'login_failed',
+        userId: 'user-1',
+        metadata: { reason: 'active_ban' },
+      });
     });
 
     it('consulta findUnique já filtrando por ban ativo (activeBanWhere)', async () => {
@@ -224,6 +249,7 @@ describe('AuthService', () => {
       expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
       const newHash = prisma.refreshToken.create.mock.calls[0]![0].data.tokenHash;
       expect(newHash).toBe(hashToken(result.refreshToken));
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
 
     it('rejeita quando o token não existe', async () => {
@@ -261,6 +287,11 @@ describe('AuthService', () => {
         data: { revokedAt: expect.any(Date) },
       });
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      expect(securityEvents.record).toHaveBeenCalledExactlyOnceWith({
+        type: 'refresh_token_reuse_detected',
+        userId: stored.userId,
+        metadata: { tokenId: stored.id },
+      });
     });
 
     it('trata corrida perdida no claim (count 0) como reuso e revoga a família', async () => {
@@ -283,6 +314,7 @@ describe('AuthService', () => {
         data: { revokedAt: expect.any(Date) },
       });
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      expect(securityEvents.record).not.toHaveBeenCalled();
     });
 
     it('rejeita quando o usuário foi anonimizado após o claim', async () => {

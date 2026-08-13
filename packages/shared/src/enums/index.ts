@@ -9,4 +9,5 @@ export * from './report-reason.enum.js';
 export * from './report-source.enum.js';
 export * from './report-status.enum.js';
 export * from './role.enum.js';
+export * from './security-event-type.enum.js';
 export * from './trust-level.enum.js';

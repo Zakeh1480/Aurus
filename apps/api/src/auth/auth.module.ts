@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
+import { SecurityEventModule } from '../security-event/security-event.module';
 import { AuthController } from './auth.controller';
 import { getAccessTtlSeconds, getJwtSecret, JWT_ALGORITHM } from './auth.constants';
 import { AuthService } from './auth.service';
@@ -10,6 +11,7 @@ import { JwtStrategy } from './jwt.strategy';
 @Module({
   imports: [
     PassportModule,
+    SecurityEventModule,
 
     JwtModule.registerAsync({
       useFactory: () => ({

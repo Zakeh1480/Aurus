@@ -17,6 +17,7 @@ import * as argon2 from 'argon2';
 
 import { toPublicUser } from '../auth/mappers/to-public-user.mapper';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService } from '../security-event/security-event.service';
 import { AvatarStorageService } from './avatar-storage.service';
 import { detectImageMimeType } from './avatar-validation';
 import { toProfile } from './mappers/to-profile.mapper';
@@ -33,6 +34,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly avatarStorage: AvatarStorageService,
+    private readonly securityEvents: SecurityEventService,
   ) {}
 
   async getProfile(userId: string): Promise<Profile> {
@@ -140,6 +142,7 @@ export class UsersService {
 
     const passwordHash = await argon2.hash(input.newPassword, { type: argon2.argon2id });
     await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await this.securityEvents.record({ type: 'password_changed', userId, metadata: null });
   }
 
   async changeEmail(userId: string, input: ChangeEmailRequest): Promise<User> {
@@ -154,6 +157,7 @@ export class UsersService {
         where: { id: userId },
         data: { email: input.newEmail },
       });
+      await this.securityEvents.record({ type: 'email_changed', userId, metadata: null });
       return toPublicUser(updated);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

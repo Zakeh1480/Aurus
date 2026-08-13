@@ -17,5 +17,6 @@ export * from './ranking-list.dto.js';
 export * from './ranking-me.dto.js';
 export * from './report.dto.js';
 export * from './score-explanation.dto.js';
+export * from './security-event.dto.js';
 export * from './user-data-export.dto.js';
 export * from './user.dto.js';

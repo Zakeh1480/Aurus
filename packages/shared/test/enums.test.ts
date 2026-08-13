@@ -11,6 +11,7 @@ import { ReportReasonSchema } from '../src/enums/report-reason.enum.js';
 import { ReportSourceSchema } from '../src/enums/report-source.enum.js';
 import { ReportStatusSchema } from '../src/enums/report-status.enum.js';
 import { RoleSchema } from '../src/enums/role.enum.js';
+import { SecurityEventTypeSchema } from '../src/enums/security-event-type.enum.js';
 import { TrustLevelSchema } from '../src/enums/trust-level.enum.js';
 
 describe('ConsentTypeSchema', () => {
@@ -133,5 +134,18 @@ describe('GestureLabelSchema', () => {
 
   it('rejeita um valor fora do enum', () => {
     expect(GestureLabelSchema.safeParse('mogging').success).toBe(false);
+  });
+});
+
+describe('SecurityEventTypeSchema', () => {
+  it.each(['login_failed', 'refresh_token_reuse_detected', 'password_changed', 'email_changed'])(
+    'aceita %s',
+    (value) => {
+      expect(SecurityEventTypeSchema.safeParse(value).success).toBe(true);
+    },
+  );
+
+  it('rejeita um valor fora do enum', () => {
+    expect(SecurityEventTypeSchema.safeParse('account_deleted').success).toBe(false);
   });
 });

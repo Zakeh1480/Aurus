@@ -11,12 +11,21 @@ import * as argon2 from 'argon2';
 
 import { activeBanWhere } from '../moderation/ban.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityEventService } from '../security-event/security-event.service';
 import { getAccessTtlSeconds, getRefreshTtlSeconds } from './auth.constants';
 import type { JwtPayload } from './jwt-payload.type';
 import { toPublicUser } from './mappers/to-public-user.mapper';
 import { generateRefreshToken, hashToken } from './token.util';
 
 const DUMMY_PASSWORD = 'dummy-password-for-timing-safety-padding';
+
+function loginBlockedReason(
+  user: { anonymizedAt: Date | null; bansReceived: unknown[] } | null,
+): 'user_not_found' | 'anonymized_account' | 'active_ban' {
+  if (!user) return 'user_not_found';
+  if (user.anonymizedAt) return 'anonymized_account';
+  return 'active_ban';
+}
 
 export interface AuthSession {
   user: User;
@@ -31,6 +40,7 @@ export class AuthService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly securityEvents: SecurityEventService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -67,11 +77,21 @@ export class AuthService implements OnModuleInit {
 
     if (!user || user.anonymizedAt || user.bansReceived.length > 0) {
       await argon2.verify(await this.getDummyHash(), input.password).catch(() => false);
+      await this.securityEvents.record({
+        type: 'login_failed',
+        userId: user ? user.id : null,
+        metadata: { reason: loginBlockedReason(user) },
+      });
       throw invalidCredentials;
     }
 
     const passwordMatches = await argon2.verify(user.passwordHash, input.password);
     if (!passwordMatches) {
+      await this.securityEvents.record({
+        type: 'login_failed',
+        userId: user.id,
+        metadata: { reason: 'invalid_password' },
+      });
       throw invalidCredentials;
     }
 
@@ -92,6 +112,11 @@ export class AuthService implements OnModuleInit {
     }
 
     if (stored.revokedAt) {
+      await this.securityEvents.record({
+        type: 'refresh_token_reuse_detected',
+        userId: stored.userId,
+        metadata: { tokenId: stored.id },
+      });
       await this.revokeAllUserTokens(stored.userId);
       throw invalid;
     }

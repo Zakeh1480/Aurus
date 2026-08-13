@@ -8,6 +8,7 @@ stages:
   - test
   - build
   - security-gate
+  - maintenance
 
 variables:
   PNPM_STORE_PATH: "$CI_PROJECT_DIR/.pnpm-store"
@@ -154,3 +155,16 @@ security-gate:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+renovate:
+  stage: maintenance
+  image: renovate/renovate:latest
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: "$CI_API_V4_URL"
+    RENOVATE_TOKEN: "$RENOVATE_TOKEN"
+    RENOVATE_REPOSITORIES: "$CI_PROJECT_PATH"
+  script:
+    - renovate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'

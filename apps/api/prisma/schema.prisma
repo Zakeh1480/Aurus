@@ -64,6 +64,13 @@ enum ReportSource {
   anti_cheat
 }
 
+enum SecurityEventType {
+  login_failed
+  refresh_token_reuse_detected
+  password_changed
+  email_changed
+}
+
 model User {
   id           String    @id @default(uuid(7))
   email        String    @unique
@@ -93,6 +100,7 @@ model User {
   bansReceived        Ban[]               @relation("BanTarget")
   bansIssued          Ban[]               @relation("BanIssuedBy")
   bansLifted          Ban[]               @relation("BanLiftedBy")
+  securityEvents      SecurityEvent[]
 
   @@map("users")
 }
@@ -304,4 +312,19 @@ model Ban {
 
   @@index([userId])
   @@map("bans")
+}
+
+model SecurityEvent {
+  id        String            @id @default(uuid(7))
+  userId    String?
+  type      SecurityEventType
+  metadata  Json?
+  createdAt DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("security_events")
 }

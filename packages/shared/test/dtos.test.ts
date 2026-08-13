@@ -39,6 +39,11 @@ import {
   ReportSchema,
 } from '../src/dtos/report.dto.js';
 import { MatchScoreExplanationSchema } from '../src/dtos/score-explanation.dto.js';
+import {
+  SecurityEventListQuerySchema,
+  SecurityEventListResponseSchema,
+  SecurityEventSchema,
+} from '../src/dtos/security-event.dto.js';
 import { MatchHistoryEntrySchema, UserDataExportSchema } from '../src/dtos/user-data-export.dto.js';
 import { UserSchema } from '../src/dtos/user.dto.js';
 import {
@@ -1259,6 +1264,72 @@ describe('ReportDetailSchema', () => {
           createdAt: NOW,
         },
       ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+const VALID_SECURITY_EVENT = {
+  id: UUID_A,
+  userId: UUID_B,
+  type: 'login_failed' as const,
+  metadata: { reason: 'invalid_password' },
+  createdAt: NOW,
+};
+
+describe('SecurityEventSchema', () => {
+  it('aceita um evento válido', () => {
+    expect(SecurityEventSchema.safeParse(VALID_SECURITY_EVENT).success).toBe(true);
+  });
+
+  it('aceita userId nulo (ex.: login_failed contra e-mail inexistente)', () => {
+    const result = SecurityEventSchema.safeParse({ ...VALID_SECURITY_EVENT, userId: null });
+    expect(result.success).toBe(true);
+  });
+
+  it('aceita metadata nulo', () => {
+    const result = SecurityEventSchema.safeParse({ ...VALID_SECURITY_EVENT, metadata: null });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita type fora do enum', () => {
+    const result = SecurityEventSchema.safeParse({
+      ...VALID_SECURITY_EVENT,
+      type: 'account_deleted',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('SecurityEventListQuerySchema', () => {
+  it('aplica defaults de paginação quando ausentes', () => {
+    const result = SecurityEventListQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual({ limit: 20, offset: 0 });
+    }
+  });
+
+  it('aceita filtro por type e por userId', () => {
+    const result = SecurityEventListQuerySchema.safeParse({
+      type: 'refresh_token_reuse_detected',
+      userId: UUID_A,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita limit acima de 100', () => {
+    expect(SecurityEventListQuerySchema.safeParse({ limit: 101 }).success).toBe(false);
+  });
+});
+
+describe('SecurityEventListResponseSchema', () => {
+  it('aceita um envelope de paginação válido', () => {
+    const result = SecurityEventListResponseSchema.safeParse({
+      entries: [VALID_SECURITY_EVENT],
+      limit: 20,
+      offset: 0,
+      total: 1,
     });
     expect(result.success).toBe(true);
   });
