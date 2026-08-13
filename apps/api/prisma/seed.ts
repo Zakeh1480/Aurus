@@ -1,27 +1,29 @@
-import { config } from "dotenv";
-import { resolve } from "node:path";
-import { AURA_SCORE_VERSION, AuraFeaturesSchema, AuraScoreSchema } from "@aurafarming/shared";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+import { AURA_SCORE_VERSION, AuraFeaturesSchema, AuraScoreSchema } from '@aurafarming/shared';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@prisma/client';
+import * as argon2 from 'argon2';
 
-config({ path: resolve(process.cwd(), "../../.env") });
+config({ path: resolve(process.cwd(), '../../.env') });
 
-const adapter = new PrismaPg({ connectionString: process.env["DATABASE_URL"] });
+const adapter = new PrismaPg({ connectionString: process.env['DATABASE_URL'] });
 const prisma = new PrismaClient({ adapter });
 
-// Placeholder — a autenticação real (hash de senha) chega no Prompt 2.
-const SEED_PASSWORD_HASH = "seed-only-not-a-real-hash";
-
 async function main() {
+  const SEED_PASSWORD_HASH = await argon2.hash('seed-only-password-not-for-prod', {
+    type: argon2.argon2id,
+  });
+
   const [alice, bob] = await Promise.all([
     prisma.user.create({
       data: {
-        email: "alice@example.com",
+        email: 'alice@example.com',
         passwordHash: SEED_PASSWORD_HASH,
-        displayName: "Alice",
+        displayName: 'Alice',
         profile: {
           create: {
-            nickname: "AliceInChains",
+            nickname: 'AliceInChains',
             rating: 1050,
             auraScoreAvg: 0.82,
             matchesPlayed: 1,
@@ -33,12 +35,12 @@ async function main() {
     }),
     prisma.user.create({
       data: {
-        email: "bob@example.com",
+        email: 'bob@example.com',
         passwordHash: SEED_PASSWORD_HASH,
-        displayName: "Bob",
+        displayName: 'Bob',
         profile: {
           create: {
-            nickname: "BobTheBuilder",
+            nickname: 'BobTheBuilder',
             rating: 950,
             auraScoreAvg: 0.61,
             matchesPlayed: 1,
@@ -52,11 +54,11 @@ async function main() {
 
   await prisma.user.create({
     data: {
-      email: "carol@example.com",
+      email: 'carol@example.com',
       passwordHash: SEED_PASSWORD_HASH,
-      displayName: "Carol",
+      displayName: 'Carol',
       profile: {
-        create: { nickname: "CarolSings", rating: 1000 },
+        create: { nickname: 'CarolSings', rating: 1000 },
       },
     },
   });
@@ -102,7 +104,7 @@ async function main() {
     data: {
       player1Id: alice.id,
       player2Id: bob.id,
-      status: "completed",
+      status: 'completed',
       scoreVersion: AURA_SCORE_VERSION,
       featuresPlayer1: aliceFeatures,
       featuresPlayer2: bobFeatures,
@@ -116,8 +118,14 @@ async function main() {
 
   await prisma.matchParticipant.createMany({
     data: [
-      { matchId: match.id, userId: alice.id, side: "player1", ratingBefore: 1000, ratingAfter: 1050 },
-      { matchId: match.id, userId: bob.id, side: "player2", ratingBefore: 1000, ratingAfter: 950 },
+      {
+        matchId: match.id,
+        userId: alice.id,
+        side: 'player1',
+        ratingBefore: 1000,
+        ratingAfter: 1050,
+      },
+      { matchId: match.id, userId: bob.id, side: 'player2', ratingBefore: 1000, ratingAfter: 950 },
     ],
   });
 
@@ -134,8 +142,8 @@ async function main() {
     },
   });
 
-  console.log("Seed concluído:", {
-    users: [alice.email, bob.email, "carol@example.com"],
+  console.log('Seed concluído:', {
+    users: [alice.email, bob.email, 'carol@example.com'],
     match: match.id,
   });
 }
