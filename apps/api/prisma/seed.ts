@@ -1,6 +1,11 @@
 import { config } from 'dotenv';
 import { resolve } from 'node:path';
-import { AURA_SCORE_VERSION, AuraFeaturesSchema, AuraScoreSchema } from '@aurafarming/shared';
+import {
+  AURA_SCORE_VERSION,
+  AuraFeaturesSchema,
+  AuraScoreSchema,
+  GESTURE_HEURISTIC_VERSION,
+} from '@aurafarming/shared';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -87,12 +92,14 @@ async function main() {
   const aliceScore = AuraScoreSchema.parse({
     overall: 0.82,
     breakdown: { posture: 0.85, eyeContact: 0.8, expression: 0.78, presence: 0.84, movement: 0.83 },
+    gesture: { label: 'none', confidence: 0, version: GESTURE_HEURISTIC_VERSION },
     version: AURA_SCORE_VERSION,
     computedAt: now,
   });
   const bobScore = AuraScoreSchema.parse({
     overall: 0.61,
     breakdown: { posture: 0.6, eyeContact: 0.58, expression: 0.65, presence: 0.6, movement: 0.62 },
+    gesture: { label: 'none', confidence: 0, version: GESTURE_HEURISTIC_VERSION },
     version: AURA_SCORE_VERSION,
     computedAt: now,
   });

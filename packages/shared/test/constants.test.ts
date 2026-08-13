@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AuraFeaturesSchema } from '../src/dtos/aura-features.dto.js';
-import { AuraScoreSchema } from '../src/dtos/aura-score.dto.js';
+import { AuraScoreBreakdownSchema } from '../src/dtos/aura-score.dto.js';
 import {
   ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH,
   ANTI_CHEAT_TRUST_THRESHOLDS,
@@ -11,12 +11,19 @@ import {
   AURA_SCORE_WEIGHTS,
   AVATAR_ALLOWED_MIME_TYPES,
   AVATAR_MAX_FILE_SIZE_BYTES,
+  GESTURE_HEURISTIC_VERSION,
   MATCH_DURATION_SECONDS,
 } from '../src/constants.js';
 
 describe('AURA_SCORE_VERSION', () => {
-  it('é "aura-score-v1"', () => {
-    expect(AURA_SCORE_VERSION).toBe('aura-score-v1');
+  it('é "aura-score-v2"', () => {
+    expect(AURA_SCORE_VERSION).toBe('aura-score-v2');
+  });
+});
+
+describe('GESTURE_HEURISTIC_VERSION', () => {
+  it('é "gesture-heuristic-v1"', () => {
+    expect(GESTURE_HEURISTIC_VERSION).toBe('gesture-heuristic-v1');
   });
 });
 
@@ -39,8 +46,8 @@ describe('AURA_METRIC_KEYS (guarda contra drift)', () => {
     expect(featureKeys.sort()).toEqual([...AURA_METRIC_KEYS].sort());
   });
 
-  it('bate com as chaves de AuraScoreSchema.breakdown', () => {
-    const breakdownKeys = Object.keys(AuraScoreSchema.shape.breakdown.shape);
+  it('bate com as chaves de AuraScoreBreakdownSchema', () => {
+    const breakdownKeys = Object.keys(AuraScoreBreakdownSchema.shape);
     expect(breakdownKeys.sort()).toEqual([...AURA_METRIC_KEYS].sort());
   });
 });

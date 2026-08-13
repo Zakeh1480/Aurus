@@ -1,6 +1,7 @@
 import {
   AURA_SCORE_VERSION,
   type AuraScore,
+  GESTURE_HEURISTIC_VERSION,
   MatchResultSchema,
   type WsEventPayload,
 } from '@aurafarming/shared';
@@ -21,6 +22,7 @@ function neutralAuraScore(): AuraScore {
   return {
     overall: 0,
     breakdown: { posture: 0, eyeContact: 0, expression: 0, presence: 0, movement: 0 },
+    gesture: { label: 'none', confidence: 0, version: GESTURE_HEURISTIC_VERSION },
     version: AURA_SCORE_VERSION,
     computedAt: new Date().toISOString(),
   };

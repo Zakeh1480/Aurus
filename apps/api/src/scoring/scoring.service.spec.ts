@@ -2,6 +2,7 @@ import {
   AURA_SCORE_VERSION,
   type AuraFeatures,
   type AuraScore,
+  GESTURE_HEURISTIC_VERSION,
   type MatchTrustDecision,
 } from '@aurafarming/shared';
 import { Test } from '@nestjs/testing';
@@ -42,7 +43,8 @@ function buildScore(overall: number): AuraScore {
       presence: overall,
       movement: overall,
     },
-    version: 'aura-score-v1',
+    gesture: { label: 'none', confidence: 0, version: GESTURE_HEURISTIC_VERSION },
+    version: AURA_SCORE_VERSION,
     computedAt: '2026-01-01T00:05:00.000Z',
   };
 }

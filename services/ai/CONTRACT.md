@@ -18,11 +18,15 @@ Documenta o contrato de `POST /score` e `POST /score/aggregate` para o
 
 ## Versionamento
 
-Toda resposta carimba `"version": "aura-score-v1"` (`AURA_SCORE_VERSION`).
-Mudanças futuras nos pesos ou no algoritmo de agregação devem incrementar a
-versão (ex.: `"aura-score-v2"`) em vez de alterar o significado de
-`"aura-score-v1"` — resultados já persistidos com uma versão continuam
-válidos/interpretáveis sob essa mesma versão para sempre.
+Toda resposta carimba `"version": "aura-score-v2"` (`AURA_SCORE_VERSION`).
+Mudanças futuras nos pesos ou no algoritmo de agregação/bônus devem
+incrementar a versão (ex.: `"aura-score-v3"`) em vez de alterar o significado
+de `"aura-score-v2"` — resultados já persistidos com uma versão continuam
+válidos/interpretáveis sob essa mesma versão para sempre. O subobjeto
+`gesture` carrega seu próprio `"version": "gesture-heuristic-v1"`
+(`GESTURE_HEURISTIC_VERSION`), independente de `AURA_SCORE_VERSION`: versiona
+só os thresholds de classificação, não a fórmula de combinação — permite
+tunar thresholds sem re-versionar o score inteiro.
 
 ## `GET /health`
 
@@ -31,7 +35,7 @@ GET /health
 ```
 
 ```json
-{ "status": "ok", "auraScoreVersion": "aura-score-v1" }
+{ "status": "ok", "auraScoreVersion": "aura-score-v2" }
 ```
 
 ## `POST /score`
@@ -67,24 +71,30 @@ de wall-clock).
     "presence": 0.9,
     "movement": 0.5
   },
-  "version": "aura-score-v1",
+  "gesture": {
+    "label": "none",
+    "confidence": 0.0,
+    "version": "gesture-heuristic-v1"
+  },
+  "version": "aura-score-v2",
   "computedAt": "2026-08-04T03:07:36.487Z"
 }
 ```
 
-`overall` é sempre a soma ponderada do `breakdown` pelos pesos correntes
+`overall` é a soma ponderada do `breakdown` pelos pesos correntes
 (`posture 0.30`, `eyeContact 0.25`, `expression 0.20`, `presence 0.15`,
-`movement 0.10`), clampada em `[0, 1]`.
+`movement 0.10`) mais o bônus de `gesture` (ver seção "Sinal de gesto"
+abaixo), clampada em `[0, 1]`.
 
 **Erros (422)** — corpo de erro no formato padrão do FastAPI/Pydantic
 (`{"detail": [{"loc": [...], "msg": "...", "type": "..."}]}`):
 
-| Caso | Exemplo |
-|---|---|
-| Métrica fora de `[0, 1]` | `posture: 1.5` |
-| Campo obrigatório faltando | `capturedAt` ausente |
-| Datetime inválido / sem sufixo `Z` | `capturedAt: "not-a-date"` |
-| Campo desconhecido | `{"posture": 0.8, ..., "extra": "nope"}` |
+| Caso                               | Exemplo                                  |
+| ---------------------------------- | ---------------------------------------- |
+| Métrica fora de `[0, 1]`           | `posture: 1.5`                           |
+| Campo obrigatório faltando         | `capturedAt` ausente                     |
+| Datetime inválido / sem sufixo `Z` | `capturedAt: "not-a-date"`               |
+| Campo desconhecido                 | `{"posture": 0.8, ..., "extra": "nope"}` |
 
 ## `POST /score/aggregate`
 
@@ -99,9 +109,33 @@ posture`). `samples` exige ao menos 1 item.
 ```json
 {
   "samples": [
-    { "posture": 0.83, "eyeContact": 0.7, "expression": 0.6, "presence": 0.9, "movement": 0.5, "sequence": 0, "capturedAt": "2026-01-01T00:00:00.000Z" },
-    { "posture": 0.85, "eyeContact": 0.72, "expression": 0.61, "presence": 0.88, "movement": 0.52, "sequence": 1, "capturedAt": "2026-01-01T00:00:02.000Z" },
-    { "posture": 0.86, "eyeContact": 0.71, "expression": 0.59, "presence": 0.91, "movement": 0.49, "sequence": 2, "capturedAt": "2026-01-01T00:00:04.000Z" }
+    {
+      "posture": 0.83,
+      "eyeContact": 0.7,
+      "expression": 0.6,
+      "presence": 0.9,
+      "movement": 0.5,
+      "sequence": 0,
+      "capturedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "posture": 0.85,
+      "eyeContact": 0.72,
+      "expression": 0.61,
+      "presence": 0.88,
+      "movement": 0.52,
+      "sequence": 1,
+      "capturedAt": "2026-01-01T00:00:02.000Z"
+    },
+    {
+      "posture": 0.86,
+      "eyeContact": 0.71,
+      "expression": 0.59,
+      "presence": 0.91,
+      "movement": 0.49,
+      "sequence": 2,
+      "capturedAt": "2026-01-01T00:00:04.000Z"
+    }
   ]
 }
 ```
@@ -135,10 +169,42 @@ não influenciam o score nem a ordem de agregação.
 
 **Erros (422)**:
 
-| Caso | Exemplo |
-|---|---|
-| `samples` vazio | `{"samples": []}` |
+| Caso                      | Exemplo                                                               |
+| ------------------------- | --------------------------------------------------------------------- |
+| `samples` vazio           | `{"samples": []}`                                                     |
 | Qualquer amostra inválida | mesmas regras de `/score`, com `loc` indexado pela posição da amostra |
+
+## Sinal de gesto (Prompt 33 — `moggar` / `farmarAura`)
+
+Todo `AuraScore` (`/score` e `/score/aggregate`) carrega um subobjeto
+`gesture` derivado do mesmo `breakdown` de 5 métricas — não é IA treinada,
+é regra determinística sobre valores já calculados, seguindo a mesma
+disciplina de função pura/versionada usada para o `overall`.
+
+```json
+{ "label": "moggar" | "farmarAura" | "none", "confidence": 0.0, "version": "gesture-heuristic-v1" }
+```
+
+Classificação (`app/scoring.py::_classify_gesture`, avaliada nessa ordem,
+`moggar` tem precedência):
+
+1. **`moggar`** se `eyeContact >= 0.70 AND posture >= 0.70 AND movement <= 0.40`
+   — contato visual sustentado/dominante + postura ereta e parada.
+2. Senão **`farmarAura`** se `movement <= 0.20 AND expression ∈ [0.35, 0.65]
+AND posture >= 0.55` — movimento lento/de baixa variância + meio-sorriso
+   confiante (nem neutro, nem sorriso máximo).
+3. Senão **`none`**.
+
+`confidence` é a margem normalizada acima do threshold binário (0 a 1). O
+bônus aplicado a `overall` é `GESTURE_BONUS_MAX (0.05) × confidence` — 0 se
+`none` (sem malus: penalizar a maioria do gameplay normal por não bater um
+padrão específico de gíria seria um risco de fairness maior que o ganho).
+`GESTURE_BONUS_MAX` é deliberadamente menor que o menor peso das 5 métricas
+(`movement`, 0.10) — é um modificador secundário, não um sinal dominante.
+
+Os 7 thresholds numéricos e a magnitude do bônus são um ponto de partida
+proposto, não validado contra dado real (não existe dataset rotulado para
+essas gírias) — ver `docs/fairness.md` para a revisão pendente.
 
 ## `POST /verify` (Prompt 6b — anti-cheat)
 
@@ -167,8 +233,13 @@ avalia sempre um único frame isolado.
   "challengeId": "323e4567-e89b-12d3-a456-426614174002",
   "keyframeBase64": "<base64 de um JPEG/PNG>",
   "claimedFeatures": {
-    "posture": 0.8, "eyeContact": 0.7, "expression": 0.6, "presence": 0.9, "movement": 0.5,
-    "sequence": 12, "capturedAt": "2026-01-01T00:00:24.000Z"
+    "posture": 0.8,
+    "eyeContact": 0.7,
+    "expression": 0.6,
+    "presence": 0.9,
+    "movement": 0.5,
+    "sequence": 12,
+    "capturedAt": "2026-01-01T00:00:24.000Z"
   }
 }
 ```
@@ -195,14 +266,14 @@ avalia sempre um único frame isolado.
 
 **Erros (422)**:
 
-| Caso | Exemplo |
-|---|---|
-| `keyframeBase64` ausente/vazio | campo faltando no body |
-| `keyframeBase64` não é base64 válido | `"not-base64!!!"` |
+| Caso                                                | Exemplo                           |
+| --------------------------------------------------- | --------------------------------- |
+| `keyframeBase64` ausente/vazio                      | campo faltando no body            |
+| `keyframeBase64` não é base64 válido                | `"not-base64!!!"`                 |
 | bytes decodificados não formam uma imagem suportada | base64 válido de `"not an image"` |
-| `claimedFeatures` com métrica fora de `[0, 1]` | `posture: 1.5` |
-| `matchId`/`userId`/`challengeId` não é um UUID | `matchId: "not-a-uuid"` |
-| Campo desconhecido no body | `extra: "nope"` |
+| `claimedFeatures` com métrica fora de `[0, 1]`      | `posture: 1.5`                    |
+| `matchId`/`userId`/`challengeId` não é um UUID      | `matchId: "not-a-uuid"`           |
+| Campo desconhecido no body                          | `extra: "nope"`                   |
 
 Thresholds (`ANTI_CHEAT_BLUR_VARIANCE_STATIC_THRESHOLD`,
 `ANTI_CHEAT_BLUR_VARIANCE_LOW_DETAIL_THRESHOLD`, `ANTI_CHEAT_FACE_MIN_AREA_RATIO`)

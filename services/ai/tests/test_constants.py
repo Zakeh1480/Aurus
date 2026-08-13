@@ -5,6 +5,8 @@ from app.constants import (
     AURA_METRIC_KEYS,
     AURA_SCORE_VERSION,
     AURA_SCORE_WEIGHTS,
+    GESTURE_BONUS_MAX,
+    GESTURE_HEURISTIC_VERSION,
 )
 from app.schemas import AuraFeatures, AuraScoreBreakdown
 
@@ -28,8 +30,16 @@ def test_metric_keys_match_breakdown_model() -> None:
 
 
 def test_version_value() -> None:
-    assert AURA_SCORE_VERSION == "aura-score-v1"
+    assert AURA_SCORE_VERSION == "aura-score-v2"
 
 
 def test_anti_cheat_version_value() -> None:
     assert ANTI_CHEAT_VERSION == "anti-cheat-v1"
+
+
+def test_gesture_heuristic_version_value() -> None:
+    assert GESTURE_HEURISTIC_VERSION == "gesture-heuristic-v1"
+
+
+def test_gesture_bonus_max_is_smaller_than_smallest_score_weight() -> None:
+    assert GESTURE_BONUS_MAX < min(AURA_SCORE_WEIGHTS.values())

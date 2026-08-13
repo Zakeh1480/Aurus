@@ -488,6 +488,12 @@ const VALID_AURA_SCORE = {
   computedAt: NOW,
 };
 
+const VALID_AURA_SCORE_V2 = {
+  ...VALID_AURA_SCORE,
+  gesture: { label: 'none' as const, confidence: 0, version: 'gesture-heuristic-v1' as const },
+  version: 'aura-score-v2' as const,
+};
+
 describe('MatchResultSchema', () => {
   it('aceita um resultado válido', () => {
     const result = MatchResultSchema.safeParse({
@@ -683,12 +689,30 @@ describe('AuraFeaturesSchema', () => {
 });
 
 describe('AuraScoreSchema', () => {
-  it('aceita um score válido carimbado com AURA_SCORE_VERSION', () => {
+  it('aceita um score histórico aura-score-v1 sem o campo gesture', () => {
     expect(AuraScoreSchema.safeParse(VALID_AURA_SCORE).success).toBe(true);
   });
 
-  it('rejeita qualquer version diferente do literal aura-score-v1', () => {
-    const result = AuraScoreSchema.safeParse({ ...VALID_AURA_SCORE, version: 'aura-score-v2' });
+  it('aceita um score aura-score-v2 com gesture', () => {
+    expect(AuraScoreSchema.safeParse(VALID_AURA_SCORE_V2).success).toBe(true);
+  });
+
+  it('rejeita aura-score-v2 sem o campo gesture', () => {
+    const withoutGesture: Record<string, unknown> = { ...VALID_AURA_SCORE_V2 };
+    delete withoutGesture.gesture;
+    expect(AuraScoreSchema.safeParse(withoutGesture).success).toBe(false);
+  });
+
+  it('rejeita aura-score-v2 com gesture.label fora do enum', () => {
+    const result = AuraScoreSchema.safeParse({
+      ...VALID_AURA_SCORE_V2,
+      gesture: { ...VALID_AURA_SCORE_V2.gesture, label: 'rizzando' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita qualquer version fora do union', () => {
+    const result = AuraScoreSchema.safeParse({ ...VALID_AURA_SCORE, version: 'aura-score-v99' });
     expect(result.success).toBe(false);
   });
 });

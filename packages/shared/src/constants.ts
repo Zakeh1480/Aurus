@@ -1,4 +1,4 @@
-export const AURA_SCORE_VERSION = 'aura-score-v1';
+export const AURA_SCORE_VERSION = 'aura-score-v2';
 
 export const AURA_METRIC_KEYS = [
   'posture',
@@ -17,6 +17,8 @@ export const AURA_SCORE_WEIGHTS: Record<AuraMetricKey, number> = {
   presence: 0.15,
   movement: 0.1,
 };
+
+export const GESTURE_HEURISTIC_VERSION = 'gesture-heuristic-v1';
 
 export const ANTI_CHEAT_VERSION = 'anti-cheat-v1';
 

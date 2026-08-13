@@ -1,6 +1,6 @@
 from typing import Final
 
-AURA_SCORE_VERSION: Final[str] = "aura-score-v1"
+AURA_SCORE_VERSION: Final[str] = "aura-score-v2"
 
 AURA_METRIC_KEYS: Final[tuple[str, ...]] = (
     "posture",
@@ -17,6 +17,20 @@ AURA_SCORE_WEIGHTS: Final[dict[str, float]] = {
     "presence": 0.15,
     "movement": 0.10,
 }
+
+
+GESTURE_HEURISTIC_VERSION: Final[str] = "gesture-heuristic-v1"
+
+GESTURE_BONUS_MAX: Final[float] = 0.05
+
+GESTURE_MOGGAR_EYE_CONTACT_MIN: Final[float] = 0.70
+GESTURE_MOGGAR_POSTURE_MIN: Final[float] = 0.70
+GESTURE_MOGGAR_MOVEMENT_MAX: Final[float] = 0.40
+
+GESTURE_FARMAR_AURA_MOVEMENT_MAX: Final[float] = 0.20
+GESTURE_FARMAR_AURA_EXPRESSION_MIN: Final[float] = 0.35
+GESTURE_FARMAR_AURA_EXPRESSION_MAX: Final[float] = 0.65
+GESTURE_FARMAR_AURA_POSTURE_MIN: Final[float] = 0.55
 
 
 ANTI_CHEAT_VERSION: Final[str] = "anti-cheat-v1"

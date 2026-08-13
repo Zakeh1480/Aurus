@@ -1,13 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { AURA_SCORE_VERSION, AuraFeaturesSchema } from "../src/smoke.js";
+import { AURA_SCORE_VERSION, AuraFeaturesSchema } from '../src/smoke.js';
 
-describe("import de @aurafarming/shared em apps/web", () => {
-  it("importa a versão do Aura Score corretamente", () => {
-    expect(AURA_SCORE_VERSION).toBe("aura-score-v1");
+describe('import de @aurafarming/shared em apps/web', () => {
+  it('importa a versão do Aura Score corretamente', () => {
+    expect(AURA_SCORE_VERSION).toBe('aura-score-v2');
   });
 
-  it("valida um AuraFeatures com o schema importado de shared", () => {
+  it('valida um AuraFeatures com o schema importado de shared', () => {
     const result = AuraFeaturesSchema.safeParse({
       posture: 0.5,
       eyeContact: 0.5,

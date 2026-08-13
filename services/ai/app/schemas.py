@@ -8,6 +8,7 @@ from app.constants import (
     ANTI_CHEAT_MAX_KEYFRAME_BASE64_LENGTH,
     ANTI_CHEAT_VERSION,
     AURA_SCORE_VERSION,
+    GESTURE_HEURISTIC_VERSION,
     SCORE_AGGREGATE_MAX_SAMPLES,
 )
 
@@ -62,11 +63,23 @@ class AuraScoreBreakdown(BaseModel):
     movement: Unit
 
 
+GestureLabel = Literal["moggar", "farmarAura", "none"]
+
+
+class GestureResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: GestureLabel
+    confidence: Unit
+    version: Literal[GESTURE_HEURISTIC_VERSION]
+
+
 class AuraScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     overall: Unit
     breakdown: AuraScoreBreakdown
+    gesture: GestureResult
     version: Literal[AURA_SCORE_VERSION]
     computedAt: IsoDatetimeStr
 

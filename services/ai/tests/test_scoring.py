@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.constants import AURA_SCORE_VERSION
-from app.schemas import AuraFeatures
-from app.scoring import aggregate_scores, compute_score
+from app.constants import AURA_SCORE_VERSION, GESTURE_HEURISTIC_VERSION
+from app.schemas import AuraFeatures, AuraScoreBreakdown
+from app.scoring import _weighted_total, aggregate_scores, compute_score
 from tests.fixtures import make_features
 
 FIXED_NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
@@ -112,3 +112,65 @@ def test_aggregate_scores_even_sample_count_interpolates_median() -> None:
     samples = [_features(posture=v) for v in (0.2, 0.4, 0.6, 0.8)]
     aggregated = aggregate_scores(samples, now=FIXED_NOW)
     assert aggregated.breakdown.posture == pytest.approx(0.5)
+
+
+def test_compute_score_default_fixture_has_no_gesture() -> None:
+    score = compute_score(_features(), now=FIXED_NOW)
+    assert score.gesture.label == "none"
+    assert score.gesture.confidence == 0.0
+    assert score.gesture.version == GESTURE_HEURISTIC_VERSION
+    assert score.overall == pytest.approx(
+        _weighted_total(
+            AuraScoreBreakdown(
+                posture=0.8, eyeContact=0.7, expression=0.6, presence=0.9, movement=0.5
+            )
+        )
+    )
+
+
+def test_compute_score_classifies_moggar_and_applies_bonus() -> None:
+    features = _features(eyeContact=0.9, posture=0.9, movement=0.1)
+    score = compute_score(features, now=FIXED_NOW)
+    assert score.gesture.label == "moggar"
+    assert score.gesture.confidence > 0.0
+    bonus = score.overall - _weighted_total(score.breakdown)
+    assert bonus == pytest.approx(0.05 * score.gesture.confidence)
+
+
+def test_compute_score_classifies_farmar_aura_and_applies_bonus() -> None:
+    features = _features(movement=0.1, expression=0.5, posture=0.6)
+    score = compute_score(features, now=FIXED_NOW)
+    assert score.gesture.label == "farmarAura"
+    assert score.gesture.confidence > 0.0
+    bonus = score.overall - _weighted_total(score.breakdown)
+    assert bonus == pytest.approx(0.05 * score.gesture.confidence)
+
+
+def test_compute_score_moggar_takes_precedence_over_farmar_aura() -> None:
+    features = _features(eyeContact=0.9, posture=0.9, movement=0.1, expression=0.5)
+    score = compute_score(features, now=FIXED_NOW)
+    assert score.gesture.label == "moggar"
+
+
+def test_compute_score_gesture_none_never_applies_bonus() -> None:
+    features = _features(eyeContact=0.1, posture=0.1, movement=0.9, expression=0.9)
+    score = compute_score(features, now=FIXED_NOW)
+    assert score.gesture.label == "none"
+    assert score.overall == pytest.approx(_weighted_total(score.breakdown))
+
+
+def test_aggregate_scores_classifies_gesture_from_median_breakdown() -> None:
+    samples = [
+        _features(eyeContact=0.85, posture=0.85, movement=0.1),
+        _features(eyeContact=0.95, posture=0.95, movement=0.05),
+        _features(eyeContact=0.9, posture=0.9, movement=0.15),
+    ]
+    aggregated = aggregate_scores(samples, now=FIXED_NOW)
+    assert aggregated.gesture.label == "moggar"
+    bonus = aggregated.overall - _weighted_total(aggregated.breakdown)
+    assert bonus == pytest.approx(0.05 * aggregated.gesture.confidence)
+
+
+def test_compute_score_stamps_gesture_heuristic_version() -> None:
+    score = compute_score(_features(), now=FIXED_NOW)
+    assert score.gesture.version == GESTURE_HEURISTIC_VERSION
