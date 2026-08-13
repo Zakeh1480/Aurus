@@ -95,7 +95,7 @@ describe('createHandshakeAuthMiddleware', () => {
     expect(next).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it('usa o primeiro IP de X-Forwarded-For (um hop confiável) em vez do address direto', async () => {
+  it('usa o último IP de X-Forwarded-For (o hop confiável, adicionado pelo proxy) em vez do address direto', async () => {
     wsAuthService.authenticate.mockResolvedValue('user-a');
     const middleware = buildMiddleware();
     const socket = fakeSocket({
@@ -111,7 +111,29 @@ describe('createHandshakeAuthMiddleware', () => {
     await vi.waitFor(() => expect(next).toHaveBeenCalled());
 
     expect(wsRateLimiter.allow).toHaveBeenCalledWith(
-      'ws-handshake:1.2.3.4',
+      'ws-handshake:9.9.9.9',
+      expect.any(Number),
+      expect.any(Number),
+    );
+  });
+
+  it('ignora um valor forjado pelo cliente no início de X-Forwarded-For (só o último hop, adicionado pelo proxy confiável, é usado)', async () => {
+    wsAuthService.authenticate.mockResolvedValue('user-a');
+    const middleware = buildMiddleware();
+    const socket = fakeSocket({
+      handshake: {
+        auth: { token: 'valid-token' },
+        headers: { 'x-forwarded-for': 'spoofed-by-client, 8.8.4.4, 9.9.9.9' },
+        address: '9.9.9.9',
+      } as never,
+    });
+    const next = vi.fn();
+
+    middleware(socket, next);
+    await vi.waitFor(() => expect(next).toHaveBeenCalled());
+
+    expect(wsRateLimiter.allow).toHaveBeenCalledWith(
+      'ws-handshake:9.9.9.9',
       expect.any(Number),
       expect.any(Number),
     );

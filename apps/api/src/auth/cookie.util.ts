@@ -1,14 +1,21 @@
-import type { Response } from "express";
+import type { Response } from 'express';
 
-import { getRefreshTtlSeconds, REFRESH_COOKIE_NAME } from "./auth.constants";
+import { getRefreshTtlSeconds, REFRESH_COOKIE_NAME } from './auth.constants';
 
-const COOKIE_PATH = "/auth";
+const COOKIE_PATH = '/auth';
+
+export function isSecureCookie(): boolean {
+  const override = process.env['COOKIE_SECURE'];
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+  return process.env['NODE_ENV'] === 'production';
+}
 
 export function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env["NODE_ENV"] === "production",
-    sameSite: "lax",
+    secure: isSecureCookie(),
+    sameSite: 'lax',
     path: COOKIE_PATH,
     maxAge: getRefreshTtlSeconds() * 1000,
   });

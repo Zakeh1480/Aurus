@@ -47,3 +47,15 @@ def test_different_keys_have_independent_counters() -> None:
     assert middleware._allow("1.2.3.4") is True
     assert middleware._allow("1.2.3.4") is False
     assert middleware._allow("5.6.7.8") is True
+
+
+def test_stale_windows_are_evicted_instead_of_leaking_memory() -> None:
+    middleware = RateLimitMiddleware(app=_ok, max_requests=5, window_seconds=60)
+    middleware._windows[100] = {"1.2.3.4": 1}
+    middleware._windows[101] = {"5.6.7.8": 1}
+
+    middleware._allow("current-client")
+
+    assert 100 not in middleware._windows
+    assert 101 not in middleware._windows
+    assert len(middleware._windows) == 1

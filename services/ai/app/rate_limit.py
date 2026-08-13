@@ -10,7 +10,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._max_requests = max_requests
         self._window_seconds = window_seconds
-        self._counters: dict[str, tuple[int, int]] = {}
+        self._windows: dict[int, dict[str, int]] = {}
 
     def _client_key(self, request: Request) -> str:
         client = request.client
@@ -19,13 +19,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _allow(self, key: str) -> bool:
         now = int(time.time())
         window = now // self._window_seconds
-        stored_window, count = self._counters.get(key, (window, 0))
 
-        if stored_window != window:
-            stored_window, count = window, 0
+        for stale_window in [w for w in self._windows if w < window]:
+            del self._windows[stale_window]
 
-        count += 1
-        self._counters[key] = (stored_window, count)
+        bucket = self._windows.setdefault(window, {})
+        count = bucket.get(key, 0) + 1
+        bucket[key] = count
         return count <= self._max_requests
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:

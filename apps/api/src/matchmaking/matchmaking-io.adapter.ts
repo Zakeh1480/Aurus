@@ -16,8 +16,11 @@ const HANDSHAKE_RATE_WINDOW_MS = 60_000;
 
 function resolveClientIp(socket: Socket): string {
   const forwardedFor = socket.handshake.headers?.['x-forwarded-for'];
-  const first = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-  const fromHeader = first?.split(',')[0]?.trim();
+  const last = Array.isArray(forwardedFor) ? forwardedFor.at(-1) : forwardedFor;
+  const fromHeader = last
+    ?.split(',')
+    .map((hop) => hop.trim())
+    .at(-1);
   return fromHeader || socket.handshake.address || 'unknown';
 }
 
