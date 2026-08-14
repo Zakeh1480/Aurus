@@ -1,7 +1,19 @@
+function toHttpOrigin(wsUrl: string): string | undefined {
+  try {
+    const url = new URL(wsUrl);
+    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildConnectSrc(): string {
+  const wsUrl = process.env['NEXT_PUBLIC_WS_URL'];
   const sources = [
     "'self'",
-    process.env['NEXT_PUBLIC_WS_URL'],
+    wsUrl,
+    wsUrl ? toHttpOrigin(wsUrl) : undefined,
 
     'wss://*.livekit.cloud',
     'https://*.livekit.cloud',
