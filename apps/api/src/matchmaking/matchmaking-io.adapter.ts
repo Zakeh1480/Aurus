@@ -49,9 +49,9 @@ export function createHandshakeAuthMiddleware(
         return;
       }
 
-      const token = socket.handshake.auth?.['token'] as string | undefined;
+      const ticket = socket.handshake.auth?.['ticket'] as string | undefined;
       try {
-        const userId = await wsAuthService.authenticate(token);
+        const userId = await wsAuthService.authenticate(ticket);
         socket.data.userId = userId;
         socket.join(userRoom(userId));
         next();

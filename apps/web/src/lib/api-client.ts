@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import {
-  AuthResponseSchema,
   type ChangeEmailRequest,
   type ChangePasswordRequest,
   ConsentSchema,
   ConsentStatusSchema,
   type CreateReportRequest,
+  BffSessionStatusResponseSchema,
   type GrantConsentRequest,
   type LoginRequest,
   MatchScoreExplanationSchema,
@@ -19,28 +19,22 @@ import {
   ReportListResponseSchema,
   type ReportListQuery,
   ReportSchema,
+  SessionUserResponseSchema,
   UserDataExportSchema,
   UserSchema,
   type UpdateProfileRequest,
   AntiCheatSessionSecretResponseSchema,
   LivekitTokenResponseSchema,
+  WsTicketResponseSchema,
 } from '@aurafarming/shared';
-
-import { getApiUrl } from './env';
 
 const SuccessSchema = z.object({ success: z.literal(true) });
 
-let accessToken: string | null = null;
+type SessionExpiredHandler = () => void;
+let sessionExpiredHandler: SessionExpiredHandler | null = null;
 
-export function setAccessToken(token: string | null): void {
-  accessToken = token;
-}
-
-type RefreshHandler = () => Promise<string | null>;
-let refreshHandler: RefreshHandler | null = null;
-
-export function setRefreshHandler(handler: RefreshHandler | null): void {
-  refreshHandler = handler;
+export function setSessionExpiredHandler(handler: SessionExpiredHandler | null): void {
+  sessionExpiredHandler = handler;
 }
 
 export class ApiError extends Error {
@@ -61,38 +55,28 @@ type RequestOptions = {
   body?: unknown;
 
   auth?: boolean;
-
-  credentials?: RequestCredentials;
 };
 
 async function request<T>(
   path: string,
   schema: ZodParseable<T>,
   options: RequestOptions = {},
-  isRetry = false,
 ): Promise<T> {
-  const { method = 'GET', body, auth = true, credentials = 'omit' } = options;
+  const { method = 'GET', body, auth = true } = options;
 
   const headers: Record<string, string> = {};
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
-  if (auth && accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
 
-  const response = await fetch(`${getApiUrl()}${path}`, {
+  const response = await fetch(`/api/bff${path}`, {
     method,
     headers,
-    credentials,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (response.status === 401 && auth && !isRetry && refreshHandler) {
-    const newToken = await refreshHandler();
-    if (newToken) {
-      return request(path, schema, options, true);
-    }
+  if (response.status === 401 && auth) {
+    sessionExpiredHandler?.();
   }
 
   const raw = response.status === 204 ? undefined : await response.json().catch(() => undefined);
@@ -112,24 +96,14 @@ async function requestMultipart<T>(
   path: string,
   schema: ZodParseable<T>,
   formData: FormData,
-  isRetry = false,
 ): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
-  }
-
-  const response = await fetch(`${getApiUrl()}${path}`, {
+  const response = await fetch(`/api/bff${path}`, {
     method: 'POST',
-    headers,
     body: formData,
   });
 
-  if (response.status === 401 && !isRetry && refreshHandler) {
-    const newToken = await refreshHandler();
-    if (newToken) {
-      return requestMultipart(path, schema, formData, true);
-    }
+  if (response.status === 401) {
+    sessionExpiredHandler?.();
   }
 
   const raw = response.status === 204 ? undefined : await response.json().catch(() => undefined);
@@ -159,20 +133,9 @@ export const authApi = {
   register: (body: RegisterRequest) =>
     request('/auth/register', UserSchema, { method: 'POST', body, auth: false }),
   login: (body: LoginRequest) =>
-    request('/auth/login', AuthResponseSchema, {
-      method: 'POST',
-      body,
-      auth: false,
-      credentials: 'include',
-    }),
-  refresh: () =>
-    request('/auth/refresh', AuthResponseSchema, {
-      method: 'POST',
-      auth: false,
-      credentials: 'include',
-    }),
-  logout: () => request('/auth/logout', SuccessSchema, { method: 'POST', credentials: 'include' }),
-  me: () => request('/auth/me', UserSchema),
+    request('/auth/login', SessionUserResponseSchema, { method: 'POST', body, auth: false }),
+  logout: () => request('/auth/logout', SuccessSchema, { method: 'POST' }),
+  session: () => request('/auth/session', BffSessionStatusResponseSchema, { auth: false }),
 };
 
 export const usersApi = {
@@ -186,17 +149,9 @@ export const usersApi = {
   listConsents: () => request('/users/me/consents', z.array(ConsentSchema)),
   consentStatus: () => request('/users/me/consents/status', z.array(ConsentStatusSchema)),
   changePassword: (body: ChangePasswordRequest) =>
-    request('/users/me/password', AuthResponseSchema, {
-      method: 'PATCH',
-      body,
-      credentials: 'include',
-    }),
+    request('/users/me/password', SessionUserResponseSchema, { method: 'PATCH', body }),
   changeEmail: (body: ChangeEmailRequest) =>
-    request('/users/me/email', AuthResponseSchema, {
-      method: 'PATCH',
-      body,
-      credentials: 'include',
-    }),
+    request('/users/me/email', SessionUserResponseSchema, { method: 'PATCH', body }),
   uploadAvatar: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -235,4 +190,8 @@ export const moderationApi = {
   getReport: (id: string) => request(`/moderation/reports/${id}`, ReportDetailSchema),
   resolveReport: (id: string, body: ModerationActionRequest) =>
     request(`/moderation/reports/${id}/action`, ReportSchema, { method: 'POST', body }),
+};
+
+export const wsApi = {
+  getTicket: () => request('/ws-ticket', WsTicketResponseSchema, { method: 'POST' }),
 };

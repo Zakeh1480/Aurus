@@ -1,113 +1,72 @@
 'use client';
 
 import * as React from 'react';
-import type { AuthResponse, LoginRequest, RegisterRequest, User } from '@aurafarming/shared';
+import type { LoginRequest, RegisterRequest, SessionUserResponse, User } from '@aurafarming/shared';
 
-import { authApi, setAccessToken, setRefreshHandler } from '@/lib/api-client';
+import { authApi, setSessionExpiredHandler } from '@/lib/api-client';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 type AuthContextValue = {
   user: User | null;
   status: AuthStatus;
-  accessToken: string | null;
   login: (body: LoginRequest) => Promise<void>;
   register: (body: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
 
-  applySession: (response: AuthResponse) => void;
+  applySession: (response: SessionUserResponse) => void;
 };
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
-function msUntilNextRefresh(expiresInSeconds: number): number {
-  return Math.max((expiresInSeconds - 60) * 1000, 5_000);
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<User | null>(null);
   const [status, setStatus] = React.useState<AuthStatus>('loading');
-  const [token, setToken] = React.useState<string | null>(null);
 
-  const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshInFlightRef = React.useRef<Promise<string | null> | null>(null);
-
-  const clearScheduledRefresh = React.useCallback(() => {
-    if (refreshTimerRef.current) {
-      clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
+  const applySession = React.useCallback((response: SessionUserResponse) => {
+    setUser(response.user);
+    setStatus('authenticated');
   }, []);
 
-  const scheduleRefresh = React.useCallback(
-    (expiresInSeconds: number) => {
-      clearScheduledRefresh();
-      refreshTimerRef.current = setTimeout(() => {
-        void performRefreshRef.current();
-      }, msUntilNextRefresh(expiresInSeconds));
-    },
-    [clearScheduledRefresh],
-  );
+  const markUnauthenticated = React.useCallback(() => {
+    setUser(null);
+    setStatus('unauthenticated');
+  }, []);
 
-  const applyAuthResponse = React.useCallback(
-    (response: AuthResponse) => {
-      setAccessToken(response.tokens.accessToken);
-      setToken(response.tokens.accessToken);
-      setUser(response.user);
-      setStatus('authenticated');
-      scheduleRefresh(response.tokens.expiresIn);
-    },
-    [scheduleRefresh],
-  );
+  React.useEffect(() => {
+    setSessionExpiredHandler(markUnauthenticated);
+    return () => setSessionExpiredHandler(null);
+  }, [markUnauthenticated]);
 
-  const performRefresh = React.useCallback(async (): Promise<string | null> => {
-    if (refreshInFlightRef.current !== null) {
-      return refreshInFlightRef.current;
-    }
+  React.useEffect(() => {
+    let cancelled = false;
 
-    const inFlight = authApi
-      .refresh()
-      .then((response) => {
-        applyAuthResponse(response);
-        return response.tokens.accessToken;
+    authApi
+      .session()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'authenticated') {
+          setUser(result.user);
+          setStatus('authenticated');
+        } else {
+          markUnauthenticated();
+        }
       })
       .catch(() => {
-        clearScheduledRefresh();
-        setAccessToken(null);
-        setToken(null);
-        setUser(null);
-        setStatus('unauthenticated');
-        return null;
-      })
-      .finally(() => {
-        refreshInFlightRef.current = null;
+        if (!cancelled) markUnauthenticated();
       });
 
-    refreshInFlightRef.current = inFlight;
-    return inFlight;
-  }, [applyAuthResponse, clearScheduledRefresh]);
-
-  const performRefreshRef = React.useRef(performRefresh);
-  React.useEffect(() => {
-    performRefreshRef.current = performRefresh;
-  }, [performRefresh]);
-
-  React.useEffect(() => {
-    setRefreshHandler(performRefresh);
-    return () => setRefreshHandler(null);
-  }, [performRefresh]);
-
-  React.useEffect(() => {
-    void performRefresh();
-    return () => clearScheduledRefresh();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [markUnauthenticated]);
 
   const login = React.useCallback(
     async (body: LoginRequest) => {
       const response = await authApi.login(body);
-      applyAuthResponse(response);
+      applySession(response);
     },
-    [applyAuthResponse],
+    [applySession],
   );
 
   const register = React.useCallback(async (body: RegisterRequest) => {
@@ -115,25 +74,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = React.useCallback(async () => {
-    clearScheduledRefresh();
     await authApi.logout().catch(() => undefined);
-    setAccessToken(null);
-    setToken(null);
-    setUser(null);
-    setStatus('unauthenticated');
-  }, [clearScheduledRefresh]);
+    markUnauthenticated();
+  }, [markUnauthenticated]);
 
   const value = React.useMemo<AuthContextValue>(
     () => ({
       user,
       status,
-      accessToken: token,
       login,
       register,
       logout,
-      applySession: applyAuthResponse,
+      applySession,
     }),
-    [user, status, token, login, register, logout, applyAuthResponse],
+    [user, status, login, register, logout, applySession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

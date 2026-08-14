@@ -13,6 +13,7 @@ import {
   AVATAR_MAX_FILE_SIZE_BYTES,
   GESTURE_HEURISTIC_VERSION,
   MATCH_DURATION_SECONDS,
+  REFRESH_COOKIE_NAME,
 } from '../src/constants.js';
 
 describe('AURA_SCORE_VERSION', () => {
@@ -90,5 +91,11 @@ describe('AVATAR_ALLOWED_MIME_TYPES', () => {
     for (const mimeType of AVATAR_ALLOWED_MIME_TYPES) {
       expect(mimeType.startsWith('image/')).toBe(true);
     }
+  });
+});
+
+describe('REFRESH_COOKIE_NAME', () => {
+  it('é "refresh_token"', () => {
+    expect(REFRESH_COOKIE_NAME).toBe('refresh_token');
   });
 });

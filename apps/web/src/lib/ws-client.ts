@@ -11,8 +11,17 @@ export type WsClient = {
   on<E extends WsEventName>(event: E, handler: (payload: WsEventPayload<E>) => void): () => void;
 };
 
-export function createWsClient(token: string): WsClient {
-  const socket = io(getWsUrl(), { autoConnect: false, auth: { token } });
+export type TicketProvider = () => Promise<string>;
+
+export function createWsClient(getTicket: TicketProvider): WsClient {
+  const socket = io(getWsUrl(), {
+    autoConnect: false,
+    auth: (callback) => {
+      getTicket()
+        .then((ticket) => callback({ ticket }))
+        .catch(() => callback({}));
+    },
+  });
 
   return {
     socket,

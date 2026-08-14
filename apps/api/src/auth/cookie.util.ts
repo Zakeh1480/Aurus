@@ -1,6 +1,7 @@
+import { REFRESH_COOKIE_NAME } from '@aurafarming/shared';
 import type { Response } from 'express';
 
-import { getRefreshTtlSeconds, REFRESH_COOKIE_NAME } from './auth.constants';
+import { getRefreshTtlSeconds } from './auth.constants';
 
 const COOKIE_PATH = '/auth';
 

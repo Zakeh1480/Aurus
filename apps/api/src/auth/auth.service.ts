@@ -12,7 +12,11 @@ import * as argon2 from 'argon2';
 import { activeBanWhere } from '../moderation/ban.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { SecurityEventService } from '../security-event/security-event.service';
-import { getAccessTtlSeconds, getRefreshTtlSeconds } from './auth.constants';
+import {
+  getAccessTtlSeconds,
+  getRefreshConcurrentGraceMs,
+  getRefreshTtlSeconds,
+} from './auth.constants';
 import type { JwtPayload } from './jwt-payload.type';
 import { toPublicUser } from './mappers/to-public-user.mapper';
 import { generateRefreshToken, hashToken } from './token.util';
@@ -130,8 +134,11 @@ export class AuthService implements OnModuleInit {
       data: { revokedAt: new Date() },
     });
     if (claim.count === 0) {
-      await this.revokeAllUserTokens(stored.userId);
-      throw invalid;
+      const isConcurrentRotationRace = await this.isWithinConcurrentGraceWindow(stored.id);
+      if (!isConcurrentRotationRace) {
+        await this.revokeAllUserTokens(stored.userId);
+        throw invalid;
+      }
     }
 
     const user = await this.prisma.user.findUnique({
@@ -185,6 +192,14 @@ export class AuthService implements OnModuleInit {
     });
 
     return { tokens: { accessToken, expiresIn }, refreshToken: rawRefreshToken };
+  }
+
+  private async isWithinConcurrentGraceWindow(refreshTokenId: string): Promise<boolean> {
+    const fresh = await this.prisma.refreshToken.findUnique({ where: { id: refreshTokenId } });
+    if (!fresh?.revokedAt) {
+      return false;
+    }
+    return Date.now() - fresh.revokedAt.getTime() <= getRefreshConcurrentGraceMs();
   }
 
   private async revokeAllUserTokens(userId: string): Promise<void> {

@@ -34,10 +34,10 @@ describe('createHandshakeAuthMiddleware', () => {
     );
   }
 
-  it('aceita o socket e entra na room do usuário quando o token é válido, chamando next() sem erro', async () => {
+  it('aceita o socket e entra na room do usuário quando o ticket é válido, chamando next() sem erro', async () => {
     wsAuthService.authenticate.mockResolvedValue('user-a');
     const middleware = buildMiddleware();
-    const socket = fakeSocket({ handshake: { auth: { token: 'valid-token' } } as never });
+    const socket = fakeSocket({ handshake: { auth: { ticket: 'valid-ticket' } } as never });
     const next = vi.fn();
 
     middleware(socket, next);
@@ -48,10 +48,10 @@ describe('createHandshakeAuthMiddleware', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
-  it('chama next(erro) quando o token é inválido — vira connect_error no cliente, nunca chega a conectar', async () => {
-    wsAuthService.authenticate.mockRejectedValue(new Error('token inválido'));
+  it('chama next(erro) quando o ticket é inválido/já consumido — vira connect_error no cliente, nunca chega a conectar', async () => {
+    wsAuthService.authenticate.mockRejectedValue(new Error('ticket inválido'));
     const middleware = buildMiddleware();
-    const socket = fakeSocket({ handshake: { auth: { token: 'bad-token' } } as never });
+    const socket = fakeSocket({ handshake: { auth: { ticket: 'bad-ticket' } } as never });
     const next = vi.fn();
 
     middleware(socket, next);
@@ -62,8 +62,8 @@ describe('createHandshakeAuthMiddleware', () => {
     expect(socket.data.userId).toBeUndefined();
   });
 
-  it('chama next(erro) quando não há token no handshake', async () => {
-    wsAuthService.authenticate.mockRejectedValue(new Error('sem token'));
+  it('chama next(erro) quando não há ticket no handshake', async () => {
+    wsAuthService.authenticate.mockRejectedValue(new Error('sem ticket'));
     const middleware = buildMiddleware();
     const socket = fakeSocket({ handshake: { auth: {} } as never });
     const next = vi.fn();
@@ -79,7 +79,7 @@ describe('createHandshakeAuthMiddleware', () => {
     wsRateLimiter.allow.mockResolvedValue(false);
     const middleware = buildMiddleware();
     const socket = fakeSocket({
-      handshake: { auth: { token: 'valid-token' }, headers: {}, address: '9.9.9.9' } as never,
+      handshake: { auth: { ticket: 'valid-ticket' }, headers: {}, address: '9.9.9.9' } as never,
     });
     const next = vi.fn();
 
@@ -100,7 +100,7 @@ describe('createHandshakeAuthMiddleware', () => {
     const middleware = buildMiddleware();
     const socket = fakeSocket({
       handshake: {
-        auth: { token: 'valid-token' },
+        auth: { ticket: 'valid-ticket' },
         headers: { 'x-forwarded-for': '1.2.3.4, 9.9.9.9' },
         address: '9.9.9.9',
       } as never,
@@ -122,7 +122,7 @@ describe('createHandshakeAuthMiddleware', () => {
     const middleware = buildMiddleware();
     const socket = fakeSocket({
       handshake: {
-        auth: { token: 'valid-token' },
+        auth: { ticket: 'valid-ticket' },
         headers: { 'x-forwarded-for': 'spoofed-by-client, 8.8.4.4, 9.9.9.9' },
         address: '9.9.9.9',
       } as never,
@@ -143,7 +143,7 @@ describe('createHandshakeAuthMiddleware', () => {
     wsRateLimiter.allow.mockRejectedValue(new Error('redis indisponível'));
     wsAuthService.authenticate.mockResolvedValue('user-a');
     const middleware = buildMiddleware();
-    const socket = fakeSocket({ handshake: { auth: { token: 'valid-token' } } as never });
+    const socket = fakeSocket({ handshake: { auth: { ticket: 'valid-ticket' } } as never });
     const next = vi.fn();
 
     middleware(socket, next);

@@ -25,3 +25,7 @@ export function getGuardTtlMs(): number {
 export function getAcceptPollIntervalMs(): number {
   return Number(process.env['MATCH_ACCEPT_POLL_INTERVAL_MS'] ?? 1000);
 }
+
+export function getWsTicketTtlSeconds(): number {
+  return Number(process.env['WS_TICKET_TTL_SECONDS'] ?? 30);
+}

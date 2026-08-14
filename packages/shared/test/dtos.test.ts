@@ -23,6 +23,10 @@ import {
   GrantConsentRequestSchema,
 } from '../src/dtos/consent.dto.js';
 import { BanSchema } from '../src/dtos/ban.dto.js';
+import {
+  BffSessionStatusResponseSchema,
+  SessionUserResponseSchema,
+} from '../src/dtos/bff-session.dto.js';
 import { LivekitTokenResponseSchema } from '../src/dtos/livekit-token.dto.js';
 import { MatchResultSchema } from '../src/dtos/match-result.dto.js';
 import { MatchSchema } from '../src/dtos/match.dto.js';
@@ -51,6 +55,7 @@ import {
   VerifyRequestSchema,
   VerifyResponseSchema,
 } from '../src/dtos/verify.dto.js';
+import { WsTicketResponseSchema } from '../src/dtos/ws-ticket.dto.js';
 
 const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
 const UUID_B = '223e4567-e89b-12d3-a456-426614174001';
@@ -317,6 +322,90 @@ describe('AuthResponseSchema', () => {
 
   it('rejeita quando falta tokens', () => {
     const result = AuthResponseSchema.safeParse({ user: validUser });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('SessionUserResponseSchema', () => {
+  const validUser = {
+    id: UUID_A,
+    email: 'player@example.com',
+    displayName: 'Player One',
+    avatarUrl: null,
+    role: 'user' as const,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+
+  it('aceita { user } sem tokens', () => {
+    const result = SessionUserResponseSchema.safeParse({ user: validUser });
+    expect(result.success).toBe(true);
+  });
+
+  it('nunca declara um campo de tokens (nunca deve vazar para o browser)', () => {
+    expect(Object.keys(SessionUserResponseSchema.shape)).toEqual(['user']);
+  });
+
+  it('rejeita quando falta user', () => {
+    const result = SessionUserResponseSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('BffSessionStatusResponseSchema', () => {
+  const validUser = {
+    id: UUID_A,
+    email: 'player@example.com',
+    displayName: 'Player One',
+    avatarUrl: null,
+    role: 'user' as const,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+
+  it('aceita status unauthenticated sem user', () => {
+    const result = BffSessionStatusResponseSchema.safeParse({ status: 'unauthenticated' });
+    expect(result.success).toBe(true);
+  });
+
+  it('aceita status authenticated com user', () => {
+    const result = BffSessionStatusResponseSchema.safeParse({
+      status: 'authenticated',
+      user: validUser,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita status authenticated sem user', () => {
+    const result = BffSessionStatusResponseSchema.safeParse({ status: 'authenticated' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita status desconhecido', () => {
+    const result = BffSessionStatusResponseSchema.safeParse({ status: 'expired' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('WsTicketResponseSchema', () => {
+  it('aceita um ticket válido', () => {
+    const result = WsTicketResponseSchema.safeParse({
+      ticket: 'a'.repeat(32),
+      expiresAt: NOW,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita ticket curto demais', () => {
+    const result = WsTicketResponseSchema.safeParse({ ticket: 'short', expiresAt: NOW });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita expiresAt que não é datetime ISO', () => {
+    const result = WsTicketResponseSchema.safeParse({
+      ticket: 'a'.repeat(32),
+      expiresAt: 'not-a-date',
+    });
     expect(result.success).toBe(false);
   });
 });

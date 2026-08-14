@@ -8,13 +8,17 @@ import { MatchmakingService } from './matchmaking.service';
 import { PendingMatchService } from './pending-match.service';
 import { QueueService } from './queue.service';
 import { WsAuthService } from './ws-auth.service';
+import { WsTicketController } from './ws-ticket.controller';
+import { WsTicketService } from './ws-ticket.service';
 
 @Module({
   imports: [AuthModule, UsersModule],
+  controllers: [WsTicketController],
   providers: [
     QueueService,
     PendingMatchService,
     WsAuthService,
+    WsTicketService,
     MatchmakingService,
     MatchmakingGateway,
     WsRateLimiterService,

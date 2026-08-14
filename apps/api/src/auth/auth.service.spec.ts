@@ -294,10 +294,13 @@ describe('AuthService', () => {
       });
     });
 
-    it('trata corrida perdida no claim (count 0) como reuso e revoga a família', async () => {
+    it('trata corrida perdida no claim (count 0) fora da janela de graça como reuso e revoga a família', async () => {
       const rawToken = 'raw-refresh-token';
       const stored = buildRefreshToken({ tokenHash: hashToken(rawToken), revokedAt: null });
-      prisma.refreshToken.findUnique.mockResolvedValue(stored);
+      const revokedLongAgo = { ...stored, revokedAt: new Date(Date.now() - 10 * 60_000) };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(stored)
+        .mockResolvedValueOnce(revokedLongAgo);
 
       prisma.refreshToken.updateMany
         .mockResolvedValueOnce({ count: 0 })
@@ -315,6 +318,42 @@ describe('AuthService', () => {
       });
       expect(prisma.refreshToken.create).not.toHaveBeenCalled();
       expect(securityEvents.record).not.toHaveBeenCalled();
+    });
+
+    it('trata corrida perdida no claim (count 0) dentro da janela de graça como rotação concorrente benigna', async () => {
+      const rawToken = 'raw-refresh-token';
+      const stored = buildRefreshToken({ tokenHash: hashToken(rawToken), revokedAt: null });
+      const revokedJustNow = { ...stored, revokedAt: new Date() };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(stored)
+        .mockResolvedValueOnce(revokedJustNow);
+
+      prisma.refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+      prisma.user.findUnique.mockResolvedValue(buildUserWithBans());
+      prisma.refreshToken.create.mockResolvedValue(buildRefreshToken({ id: 'token-2' }));
+
+      const result = await authService.refresh(rawToken);
+
+      expect(result.refreshToken).toEqual(expect.any(String));
+      expect(prisma.refreshToken.create).toHaveBeenCalledTimes(1);
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+      expect(securityEvents.record).not.toHaveBeenCalled();
+    });
+
+    it('trata corrida perdida no claim (count 0) exatamente na borda da janela de graça como reuso', async () => {
+      const rawToken = 'raw-refresh-token';
+      const stored = buildRefreshToken({ tokenHash: hashToken(rawToken), revokedAt: null });
+      const revokedJustOutsideGrace = { ...stored, revokedAt: new Date(Date.now() - 5001) };
+      prisma.refreshToken.findUnique
+        .mockResolvedValueOnce(stored)
+        .mockResolvedValueOnce(revokedJustOutsideGrace);
+
+      prisma.refreshToken.updateMany
+        .mockResolvedValueOnce({ count: 0 })
+        .mockResolvedValueOnce({ count: 1 });
+
+      await expect(authService.refresh(rawToken)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
 
     it('rejeita quando o usuário foi anonimizado após o claim', async () => {

@@ -33,3 +33,5 @@ export const MATCH_DURATION_SECONDS = 60;
 
 export const AVATAR_MAX_FILE_SIZE_BYTES = 5_000_000;
 export const AVATAR_ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+export const REFRESH_COOKIE_NAME = 'refresh_token';

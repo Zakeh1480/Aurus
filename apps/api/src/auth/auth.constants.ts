@@ -1,5 +1,3 @@
-export const REFRESH_COOKIE_NAME = 'refresh_token';
-
 export const JWT_ALGORITHM = 'HS256';
 
 export function getJwtSecret(): string {
@@ -16,4 +14,8 @@ export function getAccessTtlSeconds(): number {
 
 export function getRefreshTtlSeconds(): number {
   return Number(process.env['JWT_REFRESH_TTL_SECONDS'] ?? 604_800);
+}
+
+export function getRefreshConcurrentGraceMs(): number {
+  return Number(process.env['JWT_REFRESH_CONCURRENT_GRACE_MS'] ?? 5000);
 }

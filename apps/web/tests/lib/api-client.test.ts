@@ -1,32 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, authApi, setAccessToken, setRefreshHandler, usersApi } from "../../src/lib/api-client.js";
+import { ApiError, authApi, setSessionExpiredHandler, usersApi } from '../../src/lib/api-client.js';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 const validUser = {
-  id: "8f14e45f-ceea-467e-adc6-11a75d3f8e1a",
-  email: "jogador@example.com",
-  displayName: "jogador",
+  id: '8f14e45f-ceea-467e-adc6-11a75d3f8e1a',
+  email: 'jogador@example.com',
+  displayName: 'jogador',
   avatarUrl: null,
-  role: "user",
-  createdAt: "2026-08-04T00:00:00.000Z",
-  updatedAt: "2026-08-04T00:00:00.000Z",
+  role: 'user',
+  createdAt: '2026-08-04T00:00:00.000Z',
+  updatedAt: '2026-08-04T00:00:00.000Z',
 };
 
-const validAuthResponse = {
-  user: validUser,
-  tokens: { accessToken: "access-token", expiresIn: 900 },
-};
+const validSessionUserResponse = { user: validUser };
 
 const validProfile = {
-  userId: "8f14e45f-ceea-467e-adc6-11a75d3f8e1a",
-  nickname: "jogador",
+  userId: '8f14e45f-ceea-467e-adc6-11a75d3f8e1a',
+  nickname: 'jogador',
   avatarUrl: null,
   bio: null,
   rating: 1000,
@@ -34,120 +31,114 @@ const validProfile = {
   matchesPlayed: 0,
   wins: 0,
   losses: 0,
-  createdAt: "2026-08-04T00:00:00.000Z",
-  updatedAt: "2026-08-04T00:00:00.000Z",
+  createdAt: '2026-08-04T00:00:00.000Z',
+  updatedAt: '2026-08-04T00:00:00.000Z',
 };
 
-describe("apiClient", () => {
+describe('apiClient', () => {
   beforeEach(() => {
-    setAccessToken(null);
-    setRefreshHandler(null);
-    vi.stubGlobal("fetch", vi.fn());
+    setSessionExpiredHandler(null);
+    vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("envia credentials include no login (rota que usa o cookie httpOnly refresh_token)", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validAuthResponse));
+  it('chama o BFF same-origin (/api/bff/*), nunca a API externa diretamente', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validProfile));
 
-    await authApi.login({ email: "jogador@example.com", password: "senha1234" });
+    await usersApi.getProfile();
 
-    const [, init] = vi.mocked(fetch).mock.calls[0]!;
-    expect(init?.credentials).toBe("include");
+    const [url] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe('/api/bff/users/me/profile');
   });
 
-  it("anexa Authorization: Bearer depois de setAccessToken", async () => {
-    setAccessToken("meu-token");
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validUser));
+  it('nunca anexa um header Authorization (o BFF resolve o token server-side)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validProfile));
 
-    await authApi.me();
-
-    const [, init] = vi.mocked(fetch).mock.calls[0]!;
-    const headers = init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer meu-token");
-  });
-
-  it("não anexa Authorization quando não há token", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validUser));
-
-    await authApi.me();
+    await usersApi.getProfile();
 
     const [, init] = vi.mocked(fetch).mock.calls[0]!;
     const headers = init?.headers as Record<string, string>;
     expect(headers.Authorization).toBeUndefined();
   });
 
-  it("lança ApiError em resposta não-2xx", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }));
+  it('lança ApiError em resposta não-2xx', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: 'unauthorized' }));
 
-    await expect(authApi.me()).rejects.toBeInstanceOf(ApiError);
+    await expect(usersApi.getProfile()).rejects.toBeInstanceOf(ApiError);
   });
 
-  it("lança ApiError quando a resposta não bate com o schema de shared", async () => {
+  it('lança ApiError quando a resposta não bate com o schema de shared', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { nonsense: true }));
 
-    await expect(authApi.me()).rejects.toBeInstanceOf(ApiError);
+    await expect(usersApi.getProfile()).rejects.toBeInstanceOf(ApiError);
   });
 
-  describe("interceptor de refresh", () => {
-    it("refaz a requisição original uma vez após um refresh bem-sucedido", async () => {
-      const refreshHandler = vi.fn(async () => {
-        setAccessToken("token-novo");
-        return "token-novo";
-      });
-      setRefreshHandler(refreshHandler);
-
-      vi.mocked(fetch)
-        .mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }))
-        .mockResolvedValueOnce(jsonResponse(200, validProfile));
-
-      const profile = await usersApi.getProfile();
-
-      expect(profile.nickname).toBe("jogador");
-      expect(fetch).toHaveBeenCalledTimes(2);
-      expect(refreshHandler).toHaveBeenCalledTimes(1);
-      const [, secondInit] = vi.mocked(fetch).mock.calls[1]!;
-      const headers = secondInit?.headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bearer token-novo");
-    });
-
-    it("propaga o 401 original sem tentar de novo quando o refresh também falha", async () => {
-      const refreshHandler = vi.fn(async () => null);
-      setRefreshHandler(refreshHandler);
-
-      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }));
+  describe('sessão expirada', () => {
+    it('aciona o handler de sessão expirada num 401 de uma rota autenticada', async () => {
+      const handler = vi.fn();
+      setSessionExpiredHandler(handler);
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: 'unauthorized' }));
 
       await expect(usersApi.getProfile()).rejects.toBeInstanceOf(ApiError);
+
+      expect(handler).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledTimes(1);
-      expect(refreshHandler).toHaveBeenCalledTimes(1);
     });
 
-    it("não entra em loop se a requisição refeita também vier 401", async () => {
-      const refreshHandler = vi.fn(async () => "token-novo");
-      setRefreshHandler(refreshHandler);
+    it('não aciona o handler em chamadas auth:false (ex.: login com credenciais erradas)', async () => {
+      const handler = vi.fn();
+      setSessionExpiredHandler(handler);
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: 'unauthorized' }));
 
-      vi.mocked(fetch)
-        .mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }))
-        .mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }));
+      await expect(
+        authApi.login({ email: 'jogador@example.com', password: 'senha-errada' }),
+      ).rejects.toBeInstanceOf(ApiError);
 
-      await expect(usersApi.getProfile()).rejects.toBeInstanceOf(ApiError);
-      expect(fetch).toHaveBeenCalledTimes(2);
-      expect(refreshHandler).toHaveBeenCalledTimes(1);
+      expect(handler).not.toHaveBeenCalled();
     });
+  });
 
-    it("nunca aciona o refresh em chamadas auth:false", async () => {
-      const refreshHandler = vi.fn(async () => "token-novo");
-      setRefreshHandler(refreshHandler);
+  describe('authApi.login', () => {
+    it('chama /api/bff/auth/login e retorna { user }, nunca tokens', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, validSessionUserResponse));
 
-      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: "unauthorized" }));
+      const result = await authApi.login({ email: 'jogador@example.com', password: 'senha1234' });
 
-      await expect(authApi.login({ email: "jogador@example.com", password: "senha1234" })).rejects.toBeInstanceOf(
-        ApiError,
-      );
-      expect(refreshHandler).not.toHaveBeenCalled();
-      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(validSessionUserResponse);
+      const [url] = vi.mocked(fetch).mock.calls[0]!;
+      expect(url).toBe('/api/bff/auth/login');
+    });
+  });
+
+  describe('authApi.session', () => {
+    it('chama /api/bff/auth/session e nunca aciona o handler de sessão expirada', async () => {
+      const handler = vi.fn();
+      setSessionExpiredHandler(handler);
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { status: 'unauthenticated' }));
+
+      const result = await authApi.session();
+
+      expect(result).toEqual({ status: 'unauthenticated' });
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('usersApi.uploadAvatar', () => {
+    it('envia multipart para /api/bff/users/me/avatar e aciona sessão expirada em 401', async () => {
+      const handler = vi.fn();
+      setSessionExpiredHandler(handler);
+      vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(401, { message: 'unauthorized' }));
+
+      const file = new File(['conteudo'], 'avatar.png', { type: 'image/png' });
+      await expect(usersApi.uploadAvatar(file)).rejects.toBeInstanceOf(ApiError);
+
+      const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+      expect(url).toBe('/api/bff/users/me/avatar');
+      expect(init?.body).toBeInstanceOf(FormData);
+      expect(handler).toHaveBeenCalledTimes(1);
     });
   });
 });

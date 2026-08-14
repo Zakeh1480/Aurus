@@ -1,6 +1,7 @@
 import {
   AuthResponseSchema,
   LoginRequestSchema,
+  REFRESH_COOKIE_NAME,
   RegisterRequestSchema,
   type AuthResponse,
   type LoginRequest,
@@ -22,7 +23,6 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { REFRESH_COOKIE_NAME } from './auth.constants';
 import { AuthService } from './auth.service';
 import { clearRefreshCookie, setRefreshCookie } from './cookie.util';
 import { CurrentUser } from './decorators/current-user.decorator';

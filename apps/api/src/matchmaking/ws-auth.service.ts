@@ -1,32 +1,28 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 
-import { JWT_ALGORITHM } from '../auth/auth.constants';
-import type { JwtPayload } from '../auth/jwt-payload.type';
 import { activeBanWhere } from '../moderation/ban.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { WsTicketService } from './ws-ticket.service';
 
 @Injectable()
 export class WsAuthService {
   constructor(
-    private readonly jwtService: JwtService,
+    private readonly wsTicketService: WsTicketService,
     private readonly prisma: PrismaService,
   ) {}
 
-  async authenticate(token: string | undefined): Promise<string> {
-    if (!token) {
+  async authenticate(ticket: string | undefined): Promise<string> {
+    if (!ticket) {
       throw new UnauthorizedException();
     }
 
-    let payload: JwtPayload;
-    try {
-      payload = this.jwtService.verify<JwtPayload>(token, { algorithms: [JWT_ALGORITHM] });
-    } catch {
+    const userId = await this.wsTicketService.consume(ticket);
+    if (!userId) {
       throw new UnauthorizedException();
     }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: userId },
       include: { bansReceived: { where: activeBanWhere(), take: 1 } },
     });
     if (!user || user.anonymizedAt || user.bansReceived.length > 0) {

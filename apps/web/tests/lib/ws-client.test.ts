@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { io, fakeSocket, handlers } = vi.hoisted(() => {
   const handlers = new Map<string, (payload: unknown) => void>();
@@ -11,14 +11,23 @@ const { io, fakeSocket, handlers } = vi.hoisted(() => {
     connect: vi.fn(),
     disconnect: vi.fn(),
   };
-  return { io: vi.fn(() => fakeSocket), fakeSocket, handlers };
+  const io = vi.fn((_url: string, _options: { autoConnect: boolean; auth: unknown }) => fakeSocket);
+  return { io, fakeSocket, handlers };
 });
 
-vi.mock("socket.io-client", () => ({ io }));
+vi.mock('socket.io-client', () => ({ io }));
 
-const { createWsClient } = await import("../../src/lib/ws-client.js");
+const { createWsClient } = await import('../../src/lib/ws-client.js');
 
-describe("wsClient", () => {
+type AuthFn = (cb: (data: object) => void) => void;
+
+function getAuthFn(): AuthFn {
+  const lastCall = io.mock.calls.at(-1)!;
+  const options = lastCall[1];
+  return options.auth as AuthFn;
+}
+
+describe('wsClient', () => {
   beforeEach(() => {
     handlers.clear();
     io.mockClear();
@@ -29,38 +38,77 @@ describe("wsClient", () => {
     fakeSocket.disconnect.mockClear();
   });
 
-  it("conecta com autoConnect desabilitado e o token no handshake", () => {
-    createWsClient("meu-token");
+  it('conecta com autoConnect desabilitado e auth como função (não um objeto estático)', () => {
+    createWsClient(async () => 'algum-ticket');
 
-    expect(io).toHaveBeenCalledWith("ws://localhost:3001", {
+    expect(io).toHaveBeenCalledWith('ws://localhost:3001', {
       autoConnect: false,
-      auth: { token: "meu-token" },
+      auth: expect.any(Function),
     });
   });
 
-  it("emit valida o payload contra WsEventSchemas antes de repassar ao socket", () => {
-    const client = createWsClient("meu-token");
+  it('auth busca um ticket novo e chama o callback do socket.io com { ticket }', async () => {
+    const getTicket = vi.fn().mockResolvedValue('ticket-fresco');
+    createWsClient(getTicket);
 
-    client.emit("queue:join", { userId: "8f14e45f-ceea-467e-adc6-11a75d3f8e1a" });
+    const callback = vi.fn();
+    getAuthFn()(callback);
+    await vi.waitFor(() => expect(callback).toHaveBeenCalled());
 
-    expect(fakeSocket.emit).toHaveBeenCalledWith("queue:join", {
-      userId: "8f14e45f-ceea-467e-adc6-11a75d3f8e1a",
+    expect(getTicket).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith({ ticket: 'ticket-fresco' });
+  });
+
+  it('auth chama o callback com payload vazio se getTicket falhar (deixa o servidor rejeitar)', async () => {
+    const getTicket = vi.fn().mockRejectedValue(new Error('sem sessão'));
+    createWsClient(getTicket);
+
+    const callback = vi.fn();
+    getAuthFn()(callback);
+    await vi.waitFor(() => expect(callback).toHaveBeenCalled());
+
+    expect(callback).toHaveBeenCalledWith({});
+  });
+
+  it('busca um ticket novo a cada chamada de auth (cada tentativa de conexão/reconexão)', async () => {
+    const getTicket = vi.fn().mockResolvedValueOnce('ticket-1').mockResolvedValueOnce('ticket-2');
+    createWsClient(getTicket);
+    const authFn = getAuthFn();
+
+    const firstCallback = vi.fn();
+    authFn(firstCallback);
+    await vi.waitFor(() => expect(firstCallback).toHaveBeenCalledWith({ ticket: 'ticket-1' }));
+
+    const secondCallback = vi.fn();
+    authFn(secondCallback);
+    await vi.waitFor(() => expect(secondCallback).toHaveBeenCalledWith({ ticket: 'ticket-2' }));
+
+    expect(getTicket).toHaveBeenCalledTimes(2);
+  });
+
+  it('emit valida o payload contra WsEventSchemas antes de repassar ao socket', () => {
+    const client = createWsClient(async () => 'ticket');
+
+    client.emit('queue:join', { userId: '8f14e45f-ceea-467e-adc6-11a75d3f8e1a' });
+
+    expect(fakeSocket.emit).toHaveBeenCalledWith('queue:join', {
+      userId: '8f14e45f-ceea-467e-adc6-11a75d3f8e1a',
     });
   });
 
-  it("emit lança se o payload não bate com o schema do evento", () => {
-    const client = createWsClient("meu-token");
+  it('emit lança se o payload não bate com o schema do evento', () => {
+    const client = createWsClient(async () => 'ticket');
 
-    expect(() => client.emit("queue:join", { userId: "não-é-uuid" } as never)).toThrow();
+    expect(() => client.emit('queue:join', { userId: 'não-é-uuid' } as never)).toThrow();
     expect(fakeSocket.emit).not.toHaveBeenCalled();
   });
 
-  it("on descarta payloads que falham a validação, sem chamar o handler", () => {
-    const client = createWsClient("meu-token");
+  it('on descarta payloads que falham a validação, sem chamar o handler', () => {
+    const client = createWsClient(async () => 'ticket');
     const handler = vi.fn();
 
-    client.on("queue:matched", handler);
-    handlers.get("queue:matched")?.({ nonsense: true });
+    client.on('queue:matched', handler);
+    handlers.get('queue:matched')?.({ nonsense: true });
 
     expect(handler).not.toHaveBeenCalled();
   });
