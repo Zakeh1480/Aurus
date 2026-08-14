@@ -29,6 +29,6 @@
   "devDependencies": {
     "@aurafarming/config": "workspace:*",
     "prettier": "^3.9.6",
-    "turbo": "2.10.7"
+    "turbo": "2.10.10"
   }
 }
