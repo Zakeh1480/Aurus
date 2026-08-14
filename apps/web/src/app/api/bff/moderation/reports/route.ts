@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
-  return proxyJson(session, {
+  return proxyJson(session, request, {
     method: 'GET',
     apiPath: `/moderation/reports${request.nextUrl.search}`,
   });

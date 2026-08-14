@@ -3,7 +3,7 @@ import { getSession } from '@/lib/bff/session';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession();
-  return proxyJson(session, { method: 'GET', apiPath: '/users/me/consents/status' });
+  return proxyJson(session, request, { method: 'GET', apiPath: '/users/me/consents/status' });
 }

@@ -12,3 +12,7 @@ export function getWsUrl(): string {
 export function getApiInternalUrl(): string {
   return requireEnv('API_INTERNAL_URL', process.env.API_INTERNAL_URL);
 }
+
+export function getBffSharedSecret(): string {
+  return requireEnv('BFF_SHARED_SECRET', process.env.BFF_SHARED_SECRET);
+}

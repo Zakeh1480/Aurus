@@ -45,18 +45,27 @@ function jsonResponse(
   });
 }
 
+function buildRequest(headers: Record<string, string> = {}): Request {
+  return new Request('http://localhost/api/bff/users/me/profile', { headers });
+}
+
 describe('proxyJson', () => {
   beforeEach(() => {
     process.env.API_INTERNAL_URL = 'http://api.internal:3001';
+    process.env.BFF_SHARED_SECRET = 'test-bff-secret';
     vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete process.env.BFF_SHARED_SECRET;
   });
 
   it('retorna 401 sem chamar fetch quando não há sessão', async () => {
-    const response = await proxyJson(null, { method: 'GET', apiPath: '/users/me/profile' });
+    const response = await proxyJson(null, buildRequest(), {
+      method: 'GET',
+      apiPath: '/users/me/profile',
+    });
 
     expect(response.status).toBe(401);
     expect(fetch).not.toHaveBeenCalled();
@@ -66,7 +75,7 @@ describe('proxyJson', () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
     const session = buildFakeSession();
 
-    await proxyJson(session, { method: 'GET', apiPath: '/users/me/profile' });
+    await proxyJson(session, buildRequest(), { method: 'GET', apiPath: '/users/me/profile' });
 
     const [url, init] = vi.mocked(fetch).mock.calls[0]!;
     expect(url).toBe('http://api.internal:3001/users/me/profile');
@@ -74,10 +83,36 @@ describe('proxyJson', () => {
     expect(headers.authorization).toBe('Bearer access-token-fresco');
   });
 
+  it('anexa x-bff-secret sempre, e x-forwarded-for quando o request original traz o header', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    const session = buildFakeSession();
+
+    await proxyJson(session, buildRequest({ 'x-forwarded-for': '1.2.3.4' }), {
+      method: 'GET',
+      apiPath: '/users/me/profile',
+    });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]!;
+    const headers = init?.headers as Record<string, string>;
+    expect(headers['x-bff-secret']).toBe('test-bff-secret');
+    expect(headers['x-forwarded-for']).toBe('1.2.3.4');
+  });
+
+  it('não anexa x-forwarded-for quando o request original não traz o header', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
+    const session = buildFakeSession();
+
+    await proxyJson(session, buildRequest(), { method: 'GET', apiPath: '/users/me/profile' });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0]!;
+    const headers = init?.headers as Record<string, string>;
+    expect(headers['x-forwarded-for']).toBeUndefined();
+  });
+
   it('requireSession:false não exige sessão nem anexa Authorization', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { ok: true }));
 
-    await proxyJson(null, {
+    await proxyJson(null, buildRequest(), {
       method: 'POST',
       apiPath: '/auth/register',
       requireSession: false,
@@ -104,7 +139,10 @@ describe('proxyJson', () => {
       .mockResolvedValueOnce(jsonResponse(200, { ok: true }));
 
     const session = buildFakeSession();
-    const response = await proxyJson(session, { method: 'GET', apiPath: '/users/me/profile' });
+    const response = await proxyJson(session, buildRequest(), {
+      method: 'GET',
+      apiPath: '/users/me/profile',
+    });
 
     expect(response.status).toBe(200);
     expect(fetch).toHaveBeenCalledTimes(3);
@@ -119,7 +157,10 @@ describe('proxyJson', () => {
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
 
     const session = buildFakeSession();
-    const response = await proxyJson(session, { method: 'GET', apiPath: '/users/me/profile' });
+    const response = await proxyJson(session, buildRequest(), {
+      method: 'GET',
+      apiPath: '/users/me/profile',
+    });
 
     expect(response.status).toBe(401);
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -129,7 +170,10 @@ describe('proxyJson', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
     const session = buildFakeSession();
 
-    const response = await proxyJson(session, { method: 'DELETE', apiPath: '/users/me' });
+    const response = await proxyJson(session, buildRequest(), {
+      method: 'DELETE',
+      apiPath: '/users/me',
+    });
 
     expect(response.status).toBe(204);
   });
@@ -138,11 +182,13 @@ describe('proxyJson', () => {
 describe('proxyMultipart', () => {
   beforeEach(() => {
     process.env.API_INTERNAL_URL = 'http://api.internal:3001';
+    process.env.BFF_SHARED_SECRET = 'test-bff-secret';
     vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete process.env.BFF_SHARED_SECRET;
   });
 
   function buildMultipartRequest(): NextRequest {
@@ -175,6 +221,7 @@ describe('proxyMultipart', () => {
     const headers = init?.headers as Record<string, string>;
     expect(headers['content-type']).toBe(originalContentType);
     expect(headers.authorization).toBe('Bearer access-token-fresco');
+    expect(headers['x-bff-secret']).toBe('test-bff-secret');
   });
 
   it('rejeita com 400 quando o Content-Type não é multipart/form-data', async () => {

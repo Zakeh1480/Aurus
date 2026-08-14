@@ -6,14 +6,14 @@ import { getSession } from '@/lib/bff/session';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession();
   if (!session.refreshToken) {
     return NextResponse.json(BffSessionStatusResponseSchema.parse({ status: 'unauthenticated' }));
   }
 
   try {
-    await ensureFreshAccessToken(session);
+    await ensureFreshAccessToken(session, request);
   } catch {
     return NextResponse.json(BffSessionStatusResponseSchema.parse({ status: 'unauthenticated' }));
   }

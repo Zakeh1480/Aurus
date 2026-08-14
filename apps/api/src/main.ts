@@ -8,6 +8,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 
 import { AppModule } from './app.module';
+import { bffSecretMiddleware } from './common/bff-secret.middleware';
 import { getCorsOptions } from './common/cors.util';
 import { MatchmakingIoAdapter } from './matchmaking/matchmaking-io.adapter';
 
@@ -20,6 +21,7 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.use(helmet());
+  app.use(bffSecretMiddleware);
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'no-store');

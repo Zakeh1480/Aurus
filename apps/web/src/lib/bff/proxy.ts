@@ -2,7 +2,8 @@ import { AVATAR_MAX_FILE_SIZE_BYTES } from '@aurafarming/shared';
 import type { IronSession } from 'iron-session';
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { getApiInternalUrl } from '../env';
+import { getApiInternalUrl, getBffSharedSecret } from '../env';
+import { resolveClientIp } from './client-ip';
 import { ensureFreshAccessToken } from './refresh';
 import type { BffSessionData } from './session';
 
@@ -25,22 +26,31 @@ async function toNextResponse(response: Response): Promise<NextResponse> {
   return NextResponse.json(raw, { status: response.status });
 }
 
-function buildJsonHeaders(hasBody: boolean, accessToken: string | undefined): HeadersInit {
-  const headers: Record<string, string> = {};
+function buildJsonHeaders(
+  hasBody: boolean,
+  accessToken: string | undefined,
+  clientIp: string | undefined,
+): HeadersInit {
+  const headers: Record<string, string> = { 'x-bff-secret': getBffSharedSecret() };
   if (hasBody) {
     headers['content-type'] = 'application/json';
   }
   if (accessToken) {
     headers['authorization'] = `Bearer ${accessToken}`;
   }
+  if (clientIp) {
+    headers['x-forwarded-for'] = clientIp;
+  }
   return headers;
 }
 
 export async function proxyJson(
   session: IronSession<BffSessionData> | null,
+  request: Request,
   options: ProxyJsonOptions,
 ): Promise<NextResponse> {
   const requireSession = options.requireSession ?? true;
+  const clientIp = resolveClientIp(request);
   let accessToken: string | undefined;
 
   if (requireSession) {
@@ -48,7 +58,7 @@ export async function proxyJson(
       return unauthenticatedJson();
     }
     try {
-      accessToken = await ensureFreshAccessToken(session);
+      accessToken = await ensureFreshAccessToken(session, request);
     } catch {
       return unauthenticatedJson();
     }
@@ -57,7 +67,7 @@ export async function proxyJson(
   const forward = () =>
     fetch(`${getApiInternalUrl()}${options.apiPath}`, {
       method: options.method,
-      headers: buildJsonHeaders(options.body !== undefined, accessToken),
+      headers: buildJsonHeaders(options.body !== undefined, accessToken, clientIp),
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
@@ -65,7 +75,7 @@ export async function proxyJson(
 
   if (response.status === 401 && requireSession && session) {
     try {
-      accessToken = await ensureFreshAccessToken(session, { force: true });
+      accessToken = await ensureFreshAccessToken(session, request, { force: true });
     } catch {
       return unauthenticatedJson();
     }
@@ -86,7 +96,7 @@ export async function proxyMultipart(
 
   let accessToken: string;
   try {
-    accessToken = await ensureFreshAccessToken(session);
+    accessToken = await ensureFreshAccessToken(session, request);
   } catch {
     return unauthenticatedJson();
   }
@@ -104,9 +114,15 @@ export async function proxyMultipart(
     );
   }
 
+  const clientIp = resolveClientIp(request);
   const upstream = await fetch(`${getApiInternalUrl()}${apiPath}`, {
     method: 'POST',
-    headers: { 'content-type': contentType, authorization: `Bearer ${accessToken}` },
+    headers: {
+      'content-type': contentType,
+      authorization: `Bearer ${accessToken}`,
+      'x-bff-secret': getBffSharedSecret(),
+      ...(clientIp ? { 'x-forwarded-for': clientIp } : {}),
+    },
     body: request.body,
     duplex: 'half',
   } as RequestInit & { duplex: 'half' });

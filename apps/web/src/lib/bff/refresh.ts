@@ -1,7 +1,8 @@
 import { AuthResponseSchema, REFRESH_COOKIE_NAME } from '@aurafarming/shared';
 import type { IronSession } from 'iron-session';
 
-import { getApiInternalUrl } from '../env';
+import { getApiInternalUrl, getBffSharedSecret } from '../env';
+import { resolveClientIp } from './client-ip';
 import type { BffSessionData } from './session';
 
 const REFRESH_MARGIN_MS = 60_000;
@@ -44,6 +45,7 @@ export async function applyUpstreamAuthResponse(
 
 export async function ensureFreshAccessToken(
   session: IronSession<BffSessionData>,
+  request: Request,
   options: { force?: boolean } = {},
 ): Promise<string> {
   if (!session.refreshToken) {
@@ -52,13 +54,21 @@ export async function ensureFreshAccessToken(
   if (!options.force && session.accessTokenExpiresAt - Date.now() > REFRESH_MARGIN_MS) {
     return session.accessToken;
   }
-  return refreshSession(session);
+  return refreshSession(session, request);
 }
 
-export async function refreshSession(session: IronSession<BffSessionData>): Promise<string> {
+export async function refreshSession(
+  session: IronSession<BffSessionData>,
+  request: Request,
+): Promise<string> {
+  const clientIp = resolveClientIp(request);
   const response = await fetch(`${getApiInternalUrl()}/auth/refresh`, {
     method: 'POST',
-    headers: { cookie: `${REFRESH_COOKIE_NAME}=${session.refreshToken}` },
+    headers: {
+      cookie: `${REFRESH_COOKIE_NAME}=${session.refreshToken}`,
+      'x-bff-secret': getBffSharedSecret(),
+      ...(clientIp ? { 'x-forwarded-for': clientIp } : {}),
+    },
   });
 
   if (!response.ok) {

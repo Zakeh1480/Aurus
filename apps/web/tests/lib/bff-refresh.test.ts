@@ -51,21 +51,27 @@ function refreshResponse(status: number, body: unknown, refreshCookie?: string):
   return new Response(JSON.stringify(body), { status, headers });
 }
 
+function buildRequest(headers: Record<string, string> = {}): Request {
+  return new Request('http://localhost/api/bff/auth/session', { headers });
+}
+
 describe('refresh (BFF)', () => {
   beforeEach(() => {
     process.env.API_INTERNAL_URL = 'http://api.internal:3001';
+    process.env.BFF_SHARED_SECRET = 'test-bff-secret';
     vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete process.env.BFF_SHARED_SECRET;
   });
 
   describe('ensureFreshAccessToken', () => {
     it('retorna o access token atual sem chamar fetch quando ele ainda está fresco', async () => {
       const session = buildFakeSession({ accessTokenExpiresAt: Date.now() + 10 * 60_000 });
 
-      const token = await ensureFreshAccessToken(session);
+      const token = await ensureFreshAccessToken(session, buildRequest());
 
       expect(token).toBe('old-access-token');
       expect(fetch).not.toHaveBeenCalled();
@@ -77,7 +83,7 @@ describe('refresh (BFF)', () => {
       );
       const session = buildFakeSession({ accessTokenExpiresAt: Date.now() + 30_000 });
 
-      const token = await ensureFreshAccessToken(session);
+      const token = await ensureFreshAccessToken(session, buildRequest());
 
       expect(token).toBe('novo-access-token');
       expect(fetch).toHaveBeenCalledTimes(1);
@@ -89,7 +95,7 @@ describe('refresh (BFF)', () => {
       );
       const session = buildFakeSession({ accessTokenExpiresAt: Date.now() + 10 * 60_000 });
 
-      await ensureFreshAccessToken(session, { force: true });
+      await ensureFreshAccessToken(session, buildRequest(), { force: true });
 
       expect(fetch).toHaveBeenCalledTimes(1);
     });
@@ -97,7 +103,9 @@ describe('refresh (BFF)', () => {
     it('lança BffUnauthenticatedError sem chamar fetch quando não há refreshToken', async () => {
       const session = buildFakeSession({ refreshToken: '' });
 
-      await expect(ensureFreshAccessToken(session)).rejects.toBeInstanceOf(BffUnauthenticatedError);
+      await expect(ensureFreshAccessToken(session, buildRequest())).rejects.toBeInstanceOf(
+        BffUnauthenticatedError,
+      );
       expect(fetch).not.toHaveBeenCalled();
     });
   });
@@ -109,12 +117,26 @@ describe('refresh (BFF)', () => {
       );
       const session = buildFakeSession({ refreshToken: 'refresh-atual' });
 
-      await refreshSession(session);
+      await refreshSession(session, buildRequest());
 
       const [url, init] = vi.mocked(fetch).mock.calls[0]!;
       expect(url).toBe('http://api.internal:3001/auth/refresh');
       const headers = init?.headers as Record<string, string>;
       expect(headers.cookie).toBe('refresh_token=refresh-atual');
+    });
+
+    it('anexa x-bff-secret e x-forwarded-for (quando presente no request original)', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        refreshResponse(200, validAuthResponse, 'novo-refresh-token'),
+      );
+      const session = buildFakeSession();
+
+      await refreshSession(session, buildRequest({ 'x-forwarded-for': '1.2.3.4' }));
+
+      const [, init] = vi.mocked(fetch).mock.calls[0]!;
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['x-bff-secret']).toBe('test-bff-secret');
+      expect(headers['x-forwarded-for']).toBe('1.2.3.4');
     });
 
     it('aplica o novo access/refresh token na sessão e salva', async () => {
@@ -123,7 +145,7 @@ describe('refresh (BFF)', () => {
       );
       const session = buildFakeSession();
 
-      const token = await refreshSession(session);
+      const token = await refreshSession(session, buildRequest());
 
       expect(token).toBe('novo-access-token');
       expect(session.accessToken).toBe('novo-access-token');
@@ -136,7 +158,9 @@ describe('refresh (BFF)', () => {
       vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 401 }));
       const session = buildFakeSession();
 
-      await expect(refreshSession(session)).rejects.toBeInstanceOf(BffUnauthenticatedError);
+      await expect(refreshSession(session, buildRequest())).rejects.toBeInstanceOf(
+        BffUnauthenticatedError,
+      );
       expect(session.destroy).toHaveBeenCalledTimes(1);
       expect(session.save).not.toHaveBeenCalled();
     });
@@ -145,7 +169,7 @@ describe('refresh (BFF)', () => {
       vi.mocked(fetch).mockResolvedValueOnce(refreshResponse(200, validAuthResponse));
       const session = buildFakeSession();
 
-      await expect(refreshSession(session)).rejects.toThrow(/Set-Cookie/);
+      await expect(refreshSession(session, buildRequest())).rejects.toThrow(/Set-Cookie/);
       expect(session.destroy).toHaveBeenCalledTimes(1);
     });
   });
